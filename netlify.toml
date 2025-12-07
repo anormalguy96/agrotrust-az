@@ -4,9 +4,7 @@
   functions = "netlify/functions"
 
 [build.environment]
-  # ensure devDependencies are installed so tools like Vite are available
   NPM_FLAGS = "--include=dev"
-  # optionally pin a node version Netlify should use (adjust to your local version)
   NODE_VERSION = "20"
 
 [dev]
@@ -14,45 +12,7 @@
   targetPort = 5173
   port = 8888
 
-# SPA fallback so client-side routing works on refresh
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  force = true
-
-# Function routes
-[[redirects]]
-  from = "/api/passport/create"
-  to = "/.netlify/functions/passport-create"
-  status = 200
-
-[[redirects]]
-  from = "/api/passport/verify"
-  to = "/.netlify/functions/passport-verify"
-  status = 200
-
-[[redirects]]
-  from = "/api/escrow/init"
-  to = "/.netlify/functions/escrow-init"
-  status = 200
-
-[[redirects]]
-  from = "/api/escrow/release"
-  to = "/.netlify/functions/escrow-release"
-  status = 200
-
-[[redirects]]
-  from = "/api/health"
-  to = "/.netlify/functions/health"
-  status = 200
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  force = true
-
-  # API routes first
+# --- API routes first ---
 [[redirects]]
   from = "/api/passport/create"
   to = "/.netlify/functions/passport-create"
@@ -78,12 +38,11 @@
   to = "/.netlify/functions/health"
   status = 200
 
-# SPA fallback **last**
+# --- SPA fallback last (no force!) ---
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-  force = true
-  
+
 [context.production.environment]
   NODE_ENV = "production"
