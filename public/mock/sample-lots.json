@@ -1,0 +1,150 @@
+[
+  {
+    "id": "lot-1001",
+    "coopId": "coop-001",
+    "product": {
+      "name": "Tomatoes",
+      "variety": "Roma",
+      "quantity": 18000,
+      "unit": "kg"
+    },
+    "harvest": {
+      "harvestDate": "2025-12-10",
+      "region": "Lankaran-Astara",
+      "district": "Masalli",
+      "farmName": "Caspian Fresh Cluster A"
+    },
+    "inputs": {
+      "fertilisers": ["NPK-balanced", "Calcium foliar feed"],
+      "pesticides": ["Integrated pest management (declared)"],
+      "irrigationType": "Drip"
+    },
+    "media": {
+      "photos": []
+    },
+    "certifications": {
+      "claimed": ["GlobalG.A.P"],
+      "verified": []
+    },
+    "exportReadiness": {
+      "status": "READY_FOR_BUYER_REVIEW",
+      "targetMarkets": ["UAE", "Russia"]
+    },
+    "pricing": {
+      "currency": "USD",
+      "pricePerUnit": 1.15,
+      "unit": "kg"
+    }
+  },
+  {
+    "id": "lot-1002",
+    "coopId": "coop-002",
+    "product": {
+      "name": "Hazelnuts",
+      "variety": "Local Blend",
+      "quantity": 6500,
+      "unit": "kg"
+    },
+    "harvest": {
+      "harvestDate": "2025-11-22",
+      "region": "Ganja-Dashkasan",
+      "district": "Goygol",
+      "farmName": "HazelNorth Ridge Farms"
+    },
+    "inputs": {
+      "fertilisers": ["Organic compost"],
+      "pesticides": [],
+      "irrigationType": "Rain-fed"
+    },
+    "media": {
+      "photos": []
+    },
+    "certifications": {
+      "claimed": ["Organic"],
+      "verified": []
+    },
+    "exportReadiness": {
+      "status": "CERT_EVIDENCE_PENDING",
+      "targetMarkets": ["EU"]
+    },
+    "pricing": {
+      "currency": "EUR",
+      "pricePerUnit": 6.8,
+      "unit": "kg"
+    }
+  },
+  {
+    "id": "lot-1003",
+    "coopId": "coop-001",
+    "product": {
+      "name": "Persimmons",
+      "variety": "Hachiya",
+      "quantity": 12000,
+      "unit": "kg"
+    },
+    "harvest": {
+      "harvestDate": "2025-12-02",
+      "region": "Lankaran-Astara",
+      "district": "Masalli",
+      "farmName": "Caspian Fresh Orchard Group"
+    },
+    "inputs": {
+      "fertilisers": ["Balanced orchard feed"],
+      "pesticides": ["Seasonal orchard programme (declared)"],
+      "irrigationType": "Drip"
+    },
+    "media": {
+      "photos": []
+    },
+    "certifications": {
+      "claimed": ["GlobalG.A.P"],
+      "verified": []
+    },
+    "exportReadiness": {
+      "status": "READY_FOR_BUYER_REVIEW",
+      "targetMarkets": ["UAE", "Russia"]
+    },
+    "pricing": {
+      "currency": "USD",
+      "pricePerUnit": 1.9,
+      "unit": "kg"
+    }
+  },
+  {
+    "id": "lot-1004",
+    "coopId": "coop-003",
+    "product": {
+      "name": "Tomatoes",
+      "variety": "Cherry",
+      "quantity": 9000,
+      "unit": "kg"
+    },
+    "harvest": {
+      "harvestDate": "2025-12-14",
+      "region": "Absheron",
+      "district": "Khirdalan",
+      "farmName": "Absheron Greenhouse Line 2"
+    },
+    "inputs": {
+      "fertilisers": ["Greenhouse nutrient solution"],
+      "pesticides": ["Biocontrol programme (declared)"],
+      "irrigationType": "Hydroponic"
+    },
+    "media": {
+      "photos": []
+    },
+    "certifications": {
+      "claimed": ["GlobalG.A.P"],
+      "verified": []
+    },
+    "exportReadiness": {
+      "status": "READY_FOR_BUYER_REVIEW",
+      "targetMarkets": ["Russia", "UAE"]
+    },
+    "pricing": {
+      "currency": "USD",
+      "pricePerUnit": 2.4,
+      "unit": "kg"
+    }
+  }
+]

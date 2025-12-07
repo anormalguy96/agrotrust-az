@@ -1,0 +1,68 @@
+[
+  {
+    "id": "coop-001",
+    "name": "Caspian Fresh Cooperative",
+    "region": "Lankaran-Astara",
+    "district": "Masalli",
+    "farmsCount": 24,
+    "foundedYear": 2018,
+    "primaryProducts": ["Tomatoes", "Persimmons"],
+    "certifications": {
+      "claimed": ["GlobalG.A.P"],
+      "verified": []
+    },
+    "capacity": {
+      "seasonPeakTons": 1200,
+      "coldStorageAvailable": true
+    },
+    "contact": {
+      "email": "info@caspianfresh.example",
+      "phone": "+994-XX-XXX-XX-XX"
+    },
+    "rating": 4.6
+  },
+  {
+    "id": "coop-002",
+    "name": "HazelNorth Union",
+    "region": "Ganja-Dashkasan",
+    "district": "Goygol",
+    "farmsCount": 15,
+    "foundedYear": 2020,
+    "primaryProducts": ["Hazelnuts"],
+    "certifications": {
+      "claimed": ["Organic"],
+      "verified": []
+    },
+    "capacity": {
+      "seasonPeakTons": 650,
+      "coldStorageAvailable": false
+    },
+    "contact": {
+      "email": "export@hazelnorth.example",
+      "phone": "+994-XX-XXX-XX-XX"
+    },
+    "rating": 4.3
+  },
+  {
+    "id": "coop-003",
+    "name": "Absheron Green Partners",
+    "region": "Absheron",
+    "district": "Khirdalan",
+    "farmsCount": 10,
+    "foundedYear": 2016,
+    "primaryProducts": ["Greenhouse Vegetables", "Tomatoes"],
+    "certifications": {
+      "claimed": ["GlobalG.A.P", "HACCP-aligned processes"],
+      "verified": []
+    },
+    "capacity": {
+      "seasonPeakTons": 900,
+      "coldStorageAvailable": true
+    },
+    "contact": {
+      "email": "contact@absherongreen.example",
+      "phone": "+994-XX-XXX-XX-XX"
+    },
+    "rating": 4.5
+  }
+]

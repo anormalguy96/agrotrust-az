@@ -1,0 +1,57 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  port = 8888
+
+# SPA fallback so client-side routing works on refresh
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Clean function routes for the MVP API
+[[redirects]]
+  from = "/api/passport/create"
+  to = "/.netlify/functions/passport-create"
+  status = 200
+
+[[redirects]]
+  from = "/api/passport/verify"
+  to = "/.netlify/functions/passport-verify"
+  status = 200
+
+[[redirects]]
+  from = "/api/escrow/init"
+  to = "/.netlify/functions/escrow-init"
+  status = 200
+
+[[redirects]]
+  from = "/api/escrow/release"
+  to = "/.netlify/functions/escrow-release"
+  status = 200
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+  [build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# Single Page App fallback (serve index.html for client-side routes)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = true
+
+# (Optional) environment declared locally for Netlify CI
+[context.production.environment]
+  NODE_ENV = "production"

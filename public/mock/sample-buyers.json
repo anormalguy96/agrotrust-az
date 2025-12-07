@@ -1,0 +1,53 @@
+[
+  {
+    "id": "buyer-001",
+    "company": "Gulf Harvest Trading",
+    "country": "UAE",
+    "buyerType": "Wholesaler",
+    "preferredProducts": ["Tomatoes", "Persimmons"],
+    "certificationsRequired": ["GlobalG.A.P"],
+    "procurementProfile": {
+      "typicalOrderTons": 40,
+      "minOrderTons": 10,
+      "incoterms": ["FOB", "CIF"]
+    },
+    "contact": {
+      "name": "Procurement Desk",
+      "email": "procurement@gulfharvest.example"
+    }
+  },
+  {
+    "id": "buyer-002",
+    "company": "Volga Retail Supply",
+    "country": "Russia",
+    "buyerType": "Supermarket Chain",
+    "preferredProducts": ["Tomatoes", "Hazelnuts"],
+    "certificationsRequired": ["GlobalG.A.P", "Pesticide Residue Report"],
+    "procurementProfile": {
+      "typicalOrderTons": 80,
+      "minOrderTons": 20,
+      "incoterms": ["FCA", "DAP"]
+    },
+    "contact": {
+      "name": "Import Division",
+      "email": "imports@volgaretail.example"
+    }
+  },
+  {
+    "id": "buyer-003",
+    "company": "Nordic Nut Processors",
+    "country": "Germany",
+    "buyerType": "Food Processor",
+    "preferredProducts": ["Hazelnuts"],
+    "certificationsRequired": ["Organic", "Traceability Batch Records"],
+    "procurementProfile": {
+      "typicalOrderTons": 25,
+      "minOrderTons": 5,
+      "incoterms": ["FOB", "EXW"]
+    },
+    "contact": {
+      "name": "Raw Materials Team",
+      "email": "raw@nordicnuts.example"
+    }
+  }
+]
