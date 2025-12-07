@@ -52,6 +52,38 @@
   status = 200
   force = true
 
+  # API routes first
+[[redirects]]
+  from = "/api/passport/create"
+  to = "/.netlify/functions/passport-create"
+  status = 200
 
+[[redirects]]
+  from = "/api/passport/verify"
+  to = "/.netlify/functions/passport-verify"
+  status = 200
+
+[[redirects]]
+  from = "/api/escrow/init"
+  to = "/.netlify/functions/escrow-init"
+  status = 200
+
+[[redirects]]
+  from = "/api/escrow/release"
+  to = "/.netlify/functions/escrow-release"
+  status = 200
+
+[[redirects]]
+  from = "/api/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+# SPA fallback **last**
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = true
+  
 [context.production.environment]
   NODE_ENV = "production"
