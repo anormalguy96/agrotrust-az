@@ -3,6 +3,12 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  # ensure devDependencies are installed so tools like Vite are available
+  NPM_FLAGS = "--include=dev"
+  # optionally pin a node version Netlify should use (adjust to your local version)
+  NODE_VERSION = "20"
+
 [dev]
   command = "npm run dev"
   targetPort = 5173
@@ -15,7 +21,7 @@
   status = 200
   force = true
 
-# Clean function routes for the MVP API
+# Function routes
 [[redirects]]
   from = "/api/passport/create"
   to = "/.netlify/functions/passport-create"
@@ -41,9 +47,5 @@
   to = "/.netlify/functions/health"
   status = 200
 
-# Optional environment for production
 [context.production.environment]
   NODE_ENV = "production"
-  
-[build.environment]
-  NODE_ENV = "development"
