@@ -44,3 +44,6 @@
 # Optional environment for production
 [context.production.environment]
   NODE_ENV = "production"
+  
+[build.environment]
+  NODE_ENV = "development"
