@@ -1,5 +1,6 @@
 // agrotrust-az/src/main.tsx
 
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 
@@ -17,6 +18,8 @@ if (!rootElement) {
   // but it makes the error clearer during setup.
   throw new Error("Root element #root not found. Check index.html.");
 }
+
+<Route path="/auth/callback" element={<AuthCallback/>} />
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
