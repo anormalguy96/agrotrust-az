@@ -19,8 +19,6 @@ if (!rootElement) {
   throw new Error("Root element #root not found. Check index.html.");
 }
 
-<Route path="/auth/callback" element={<AuthCallback/>} />
-
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     <ThemeProvider>
