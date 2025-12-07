@@ -1,6 +1,7 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
 
 [dev]
   command = "npm run dev"
@@ -12,6 +13,7 @@
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
 
 # Clean function routes for the MVP API
 [[redirects]]
@@ -39,18 +41,6 @@
   to = "/.netlify/functions/health"
   status = 200
 
-  [build]
-  command = "npm run build"
-  publish = "dist"
-  functions = "netlify/functions"
-
-# Single Page App fallback (serve index.html for client-side routes)
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  force = true
-
-# (Optional) environment declared locally for Netlify CI
+# Optional environment for production
 [context.production.environment]
   NODE_ENV = "production"
