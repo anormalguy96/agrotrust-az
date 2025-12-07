@@ -38,11 +38,11 @@
   to = "/.netlify/functions/health"
   status = 200
 
-# --- SPA fallback last (no force!) ---
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
 
 [context.production.environment]
   NODE_ENV = "production"
