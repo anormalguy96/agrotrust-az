@@ -52,6 +52,7 @@ export const router = createBrowserRouter([
       { path: "auth/sign-in", element: <SignIn /> },
       { path: "auth/sign-up", element: <SignUp /> },
       { path: "auth/verify-email", element: <VerifyEmail /> },
+      { path: "auth/callback", element: <AuthCallback /> },
 
       // Friendly explicit error route
       { path: "forbidden", element: <Forbidden /> },
