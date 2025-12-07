@@ -46,6 +46,12 @@
   from = "/api/health"
   to = "/.netlify/functions/health"
   status = 200
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = true
+
 
 [context.production.environment]
   NODE_ENV = "production"
