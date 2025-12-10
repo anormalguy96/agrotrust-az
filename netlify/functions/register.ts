@@ -1,7 +1,5 @@
-// netlify/functions/register.ts
 import type { Handler } from "@netlify/functions";
 import bcrypt from "bcryptjs";
-
 import { supabaseAdmin } from "./supabaseClient";
 import { mailer } from "./mailer";
 
@@ -39,7 +37,6 @@ export const handler: Handler = async (event) => {
       .single();
 
     if (userError) {
-      // Unique violation (email)
       if ((userError as any).code === "23505") {
         return { statusCode: 409, body: "Email is already registered" };
       }
@@ -49,7 +46,7 @@ export const handler: Handler = async (event) => {
 
     // 2) Create OTP row
     const otp = generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     const { error: otpError } = await supabaseAdmin
       .from("email_verifications")
@@ -64,17 +61,28 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, body: "Failed to create verification code" };
     }
 
-    // 3) Send OTP email
-    await mailer.sendMail({
-      from: `"AgroTrust AZ" <${process.env.SMTP_USER}>`,
-      to: normalizedEmail,
-      subject: "Your AgroTrust AZ verification code",
-      text: `Your verification code is: ${otp}\n\nIt is valid for 10 minutes.`,
-    });
+    // 3) Try to send email, but don't crash on failure
+    let emailSent = false;
+    try {
+      await mailer.sendMail({
+        from: `"AgroTrust AZ" <${process.env.SMTP_USER}>`,
+        to: normalizedEmail,
+        subject: "Your AgroTrust AZ verification code",
+        text: `Your verification code is: ${otp}\n\nIt is valid for 10 minutes.`,
+      });
+      emailSent = true;
+    } catch (mailError) {
+      console.error("Error sending verification email:", mailError);
+    }
 
     return {
       statusCode: 201,
-      body: JSON.stringify({ message: "User created; OTP sent" }),
+      body: JSON.stringify({
+        message: "User created; verification code generated",
+        emailSent,
+        // For local debugging you *can* expose the OTP:
+        ...(process.env.NODE_ENV !== "production" ? { otp } : {}),
+      }),
     };
   } catch (err) {
     console.error("Register error:", err);
