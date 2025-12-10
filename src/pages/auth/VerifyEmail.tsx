@@ -9,31 +9,38 @@ import { useAuth } from "@/hooks/useAuth";
 import type { UserRole } from "@/app/providers/AuthProvider";
 
 /**
- * VerifyEmail (MVP)
+ * VerifyEmail (real OTP-backed version)
  *
- * Hackathon-friendly verification screen.
- * No real email is sent.
- * This page exists to make the auth journey feel complete and credible.
+ * - User lands here after SignUp
+ * - Enters OTP received by email
+ * - We call Netlify function `verify-email`
+ * - On success, we sign the user in and redirect to dashboard
  */
 
 type LocationState = {
   email?: string;
   organisation?: string;
   role?: UserRole;
+  name?: string; // optional, in case we pass it later
 };
 
 export function VerifyEmail() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, signIn } = useAuth();
 
+  const [otp, setOtp] = useState("");
   const [status, setStatus] = useState<"idle" | "verifying" | "verified">("idle");
+  const [error, setError] = useState<string | null>(null);
 
   const state = (location.state ?? null) as LocationState | null;
 
-  const displayEmail = useMemo(() => {
-    return state?.email?.trim() || user?.email || "your email";
+  // The email we actually use to verify on backend
+  const effectiveEmail = useMemo(() => {
+    return state?.email?.trim() || user?.email || "";
   }, [state?.email, user?.email]);
+
+  const displayEmail = effectiveEmail || "your email";
 
   const displayOrg = useMemo(() => {
     return state?.organisation?.trim() || undefined;
@@ -44,24 +51,63 @@ export function VerifyEmail() {
   }, [state?.role, user?.role]);
 
   useEffect(() => {
-    // If someone lands here without being "signed in" in the MVP,
-    // route them to sign up for a smoother demo flow.
-    if (!isAuthenticated) return;
-  }, [isAuthenticated]);
+    // If user is already authenticated, we can redirect straight to dashboard
+    if (isAuthenticated) {
+      navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
-  function handleSimulateVerify() {
-    if (status === "verifying") return;
+  const canSubmit = effectiveEmail && otp.trim().length > 0 && status !== "verifying";
 
+  async function handleVerify(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!canSubmit) return;
+
+    setError(null);
     setStatus("verifying");
 
-    // MVP simulation: brief client-side state change
-    window.setTimeout(() => {
-      setStatus("verified");
-    }, 350);
-  }
+    try {
+      const res = await fetch("/.netlify/functions/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: effectiveEmail,
+          otp: otp.trim(),
+        }),
+      });
 
-  function handleContinue() {
-    navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Verification failed. Please try again.");
+      }
+
+      // Mark as verified in UI
+      setStatus("verified");
+
+      // Lightweight "session" for the MVP via AuthProvider
+      // We don't have the original name here reliably, so we fall back gracefully
+      const fallbackName =
+        state?.name ||
+        displayOrg ||
+        effectiveEmail ||
+        "AgroTrust user";
+
+      const role: UserRole = displayRole || "coop";
+
+      await signIn({
+        email: effectiveEmail,
+        name: fallbackName,
+        role,
+      });
+
+      // Send them to the dashboard
+      navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Verification failed. Please try again.";
+      setError(msg);
+      setStatus("idle");
+    }
   }
 
   return (
@@ -72,9 +118,8 @@ export function VerifyEmail() {
           <h1 className="verify-title">Confirm your account</h1>
 
           <p className="muted verify-subtitle">
-            In a production release, {BRAND.productName} would send a secure
-            verification link to protect buyer and cooperative identities.
-            For this MVP, we simulate the step to keep the demo fast.
+            We&apos;ve sent a one-time verification code to {displayEmail}. Enter
+            it below to activate your {BRAND.productName} account.
           </p>
 
           <div className="verify-panel card card--soft">
@@ -104,53 +149,63 @@ export function VerifyEmail() {
             )}
           </div>
 
-          <div className="verify-status">
-            {status === "idle" && (
-              <div className="verify-hint muted">
-                Click the button below to simulate verification.
+          <form onSubmit={handleVerify} className="verify-form">
+            <label className="verify-label">
+              Verification code
+              <input
+                className="input"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="Enter the 6-digit code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+              />
+            </label>
+
+            {error && (
+              <div className="verify-alert auth-alert--error">
+                {error}
               </div>
             )}
 
-            {status === "verifying" && (
-              <div className="verify-hint muted">
-                Verifying your email…
-              </div>
-            )}
+            <div className="verify-status">
+              {status === "idle" && (
+                <div className="verify-hint muted">
+                  Check your inbox for a one-time code sent by AgroTrust AZ.
+                </div>
+              )}
 
-            {status === "verified" && (
-              <div className="verify-success">
-                Email verified for the demo. You can now access the dashboard.
-              </div>
-            )}
-          </div>
+              {status === "verifying" && (
+                <div className="verify-hint muted">
+                  Verifying your email…
+                </div>
+              )}
 
-          <div className="verify-actions">
-            {status !== "verified" ? (
+              {status === "verified" && (
+                <div className="verify-success">
+                  Email verified. Redirecting you to the dashboard…
+                </div>
+              )}
+            </div>
+
+            <div className="verify-actions">
               <button
-                type="button"
+                type="submit"
                 className="btn btn--primary"
-                onClick={handleSimulateVerify}
-                disabled={status === "verifying"}
+                disabled={!canSubmit}
               >
-                {status === "verifying" ? "Verifying…" : "Simulate verification"}
+                {status === "verifying" ? "Verifying…" : "Verify email"}
               </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={handleContinue}
-              >
-                Continue to dashboard
-              </button>
-            )}
 
-            <NavLink to={ROUTES.AUTH.SIGN_IN} className="btn btn--ghost">
-              Back to sign in
-            </NavLink>
-          </div>
+              <NavLink to={ROUTES.AUTH.SIGN_IN} className="btn btn--ghost">
+                Back to sign in
+              </NavLink>
+            </div>
+          </form>
 
           <div className="verify-foot muted">
-            This is a hackathon flow. Real verification can be enabled later.
+            Didn&apos;t receive a code? Check spam or contact the AgroTrust team
+            during the demo.
           </div>
         </div>
 
@@ -167,8 +222,8 @@ export function VerifyEmail() {
           <div className="card card--soft">
             <div className="aside-label">Next demo step</div>
             <p className="muted">
-              Open Product lots to generate a Digital Product Passport and show
-              QR verification in action.
+              After verification, open Product lots to generate a Digital Product
+              Passport and show QR verification in action.
             </p>
             <NavLink to={ROUTES.DASHBOARD.LOTS} className="btn btn--soft">
               Go to lots
@@ -236,8 +291,23 @@ export function VerifyEmail() {
             font-weight: var(--fw-medium);
           }
 
+          .verify-form{
+            margin-top: var(--space-4);
+            display:flex;
+            flex-direction: column;
+            gap: var(--space-3);
+          }
+
+          .verify-alert{
+            padding: var(--space-3);
+            border-radius: var(--radius-1);
+            border: var(--border-1);
+            font-size: var(--fs-2);
+            background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+          }
+
           .verify-status{
-            margin-top: var(--space-3);
+            margin-top: var(--space-2);
           }
 
           .verify-hint{
@@ -245,6 +315,7 @@ export function VerifyEmail() {
           }
 
           .verify-success{
+            margin-top: var(--space-2);
             padding: var(--space-3);
             border-radius: var(--radius-1);
             border: var(--border-1);

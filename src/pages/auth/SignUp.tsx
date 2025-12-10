@@ -9,20 +9,21 @@ import { useAuth } from "@/hooks/useAuth";
 import type { UserRole } from "@/app/providers/AuthProvider";
 
 /**
- * SignUp (MVP)
+ * SignUp (MVP, now with real backend)
  *
- * Mock sign-up for hackathon demo.
- * No password required.
- * We capture basic identity + role so the dashboard narrative is strong.
+ * - Sends registration data to Netlify function `register`
+ * - Inserts user into Supabase
+ * - Sends OTP email for verification
  */
 export function SignUp() {
   const navigate = useNavigate();
-  const { signIn, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth(); // we don't sign in here, only after OTP verify
 
   const [role, setRole] = useState<UserRole>("coop");
   const [name, setName] = useState("");
   const [organisation, setOrganisation] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,10 @@ export function SignUp() {
   }, [isAuthenticated, navigate]);
 
   const canSubmit =
-    name.trim().length > 0 && email.trim().length > 0 && !busy;
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.trim().length >= 6 &&
+    !busy;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -42,6 +46,7 @@ export function SignUp() {
 
     const cleanedEmail = email.trim();
     const cleanedName = name.trim();
+    const cleanedPassword = password.trim();
 
     if (!cleanedName) {
       setError("Please enter your name.");
@@ -53,23 +58,42 @@ export function SignUp() {
       return;
     }
 
+    if (cleanedPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    // Very simple split: first token as first name, the rest as last name
+    const [firstName, ...rest] = cleanedName.split(" ");
+    const lastName = rest.join(" ") || firstName;
+
     setBusy(true);
     try {
-      await signIn({
-        email: cleanedEmail,
-        name: cleanedName,
-        role
+      const res = await fetch("/.netlify/functions/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          role,
+          email: cleanedEmail,
+          password: cleanedPassword,
+        }),
       });
 
-      // For a hackathon MVP we skip real email verification.
-      // We keep a dedicated page for narrative completeness.
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Sign-up failed. Please try again.");
+      }
+
+      // Success → go to OTP/verification screen
       navigate(ROUTES.AUTH.VERIFY_EMAIL, {
         replace: true,
         state: {
           email: cleanedEmail,
           organisation: organisation.trim() || undefined,
-          role
-        }
+          role,
+        },
       });
     } catch (err) {
       const msg =
@@ -87,8 +111,9 @@ export function SignUp() {
           <p className="auth-kicker">Create your account</p>
           <h1 className="auth-title">Join {BRAND.productName}</h1>
           <p className="muted auth-subtitle">
-            This is a hackathon MVP sign-up. You can create a cooperative or
-            buyer profile and access the demo dashboard immediately.
+            This MVP now uses real registration with email verification. Create a
+            cooperative or buyer profile and access the demo dashboard after
+            confirming your email.
           </p>
 
           <form onSubmit={handleSubmit} className="auth-form">
@@ -142,6 +167,18 @@ export function SignUp() {
               />
             </label>
 
+            <label className="auth-label">
+              Password
+              <input
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Choose a password"
+                autoComplete="new-password"
+              />
+            </label>
+
             {error && (
               <div className="auth-alert auth-alert--error">
                 {error}
@@ -163,7 +200,7 @@ export function SignUp() {
             </div>
 
             <div className="auth-foot muted">
-              For the demo, any email works. No password is required.
+              You’ll receive a one-time verification code at this email.
             </div>
           </form>
         </div>

@@ -1,48 +1,47 @@
 [build]
-  command = "npm run build"
-  publish = "dist"
+  command   = "npm run build"
+  publish   = "dist"
   functions = "netlify/functions"
 
 [build.environment]
-  NPM_FLAGS = "--include=dev"
+  NPM_FLAGS    = "--include=dev"
   NODE_VERSION = "20"
 
 [dev]
-  command = "npm run dev"
-  targetPort = 5173
-  port = 8888
+  command    = "npm run dev"
+  framework  = "vite"
+  targetPort = 5173   # where Vite dev server runs
+  port       = 8888   # Netlify dev URL
+  autoLaunch = false
 
-# --- API routes first ---
 [[redirects]]
-  from = "/api/passport/create"
-  to = "/.netlify/functions/passport-create"
+  from   = "/api/passport/create"
+  to     = "/.netlify/functions/passport-create"
   status = 200
 
 [[redirects]]
-  from = "/api/passport/verify"
-  to = "/.netlify/functions/passport-verify"
+  from   = "/api/passport/verify"
+  to     = "/.netlify/functions/passport-verify"
   status = 200
 
 [[redirects]]
-  from = "/api/escrow/init"
-  to = "/.netlify/functions/escrow-init"
+  from   = "/api/escrow/init"
+  to     = "/.netlify/functions/escrow-init"
   status = 200
 
 [[redirects]]
-  from = "/api/escrow/release"
-  to = "/.netlify/functions/escrow-release"
+  from   = "/api/escrow/release"
+  to     = "/.netlify/functions/escrow-release"
   status = 200
 
 [[redirects]]
-  from = "/api/health"
-  to = "/.netlify/functions/health"
+  from   = "/api/health"
+  to     = "/.netlify/functions/health"
   status = 200
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  force = true
-
-[context.production.environment]
-  NODE_ENV = "production"
+# ❌ Disable SPA wildcard redirect for dev – it breaks Vite assets
+# [[redirects]]
+#   from   = "/*"
+#   to     = "/index.html"
+#   status = 200
+#   force  = true
