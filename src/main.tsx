@@ -13,8 +13,6 @@ import "@/styles/globals.css";
 
 const rootElement = document.getElementById("root");
 
-<Route path="/auth/callback" element={<AuthCallback/>} />
-
 if (!rootElement) {
   // This should never happen if index.html is correct,
   // but it makes the error clearer during setup.

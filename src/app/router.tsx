@@ -1,5 +1,3 @@
-// agrotrust-az/src/app/router.tsx
-<RouterProvider router={router} />
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { ROUTES } from "@/app/config/routes";
