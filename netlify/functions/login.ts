@@ -2,69 +2,78 @@ import type { Handler } from "@netlify/functions";
 import bcrypt from "bcryptjs";
 import { supabaseAdmin } from "./supabaseClient";
 
+const json = (statusCode: number, body: unknown) => ({
+  statusCode,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(body),
+});
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method not allowed" };
+    return json(405, {
+      error: "METHOD_NOT_ALLOWED",
+      message: "Only POST is allowed",
+    });
   }
 
   try {
-    const { email, password } = JSON.parse(event.body || "{}") as {
-      email?: string;
-      password?: string;
-    };
+    const { email, password } = JSON.parse(event.body || "{}");
 
     if (!email || !password) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Email and password are required." }),
-      };
+      return json(400, {
+        error: "VALIDATION_ERROR",
+        message: "Email and password are required.",
+      });
     }
 
     const { data: user, error } = await supabaseAdmin
       .from("users")
-      .select("id, email, first_name, last_name, role, password_hash, email_verified")
+      .select("id, email, role, email_verified, password_hash")
       .eq("email", email.toLowerCase())
       .single();
 
     if (error || !user) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: "Invalid email or password." }),
-      };
+      console.error("login: user not found or DB error", error);
+      return json(401, {
+        error: "INVALID_CREDENTIALS",
+        message: "Invalid email or password.",
+      });
     }
 
     if (!user.email_verified) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({ error: "Please verify your email first." }),
-      };
+      return json(401, {
+        error: "EMAIL_NOT_VERIFIED",
+        message: "Please verify your email before logging in.",
+      });
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
+    const ok = await bcrypt.compare(password, user.password_hash || "");
     if (!ok) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: "Invalid email or password." }),
-      };
+      return json(401, {
+        error: "INVALID_CREDENTIALS",
+        message: "Invalid email or password.",
+      });
     }
 
-    const publicUser = {
+    const sessionUser = {
       id: user.id,
       email: user.email,
       role: user.role,
-      firstName: user.first_name,
-      lastName: user.last_name,
+      emailVerified: user.email_verified,
     };
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ user: publicUser }),
-    };
+    return json(200, {
+      user: sessionUser,
+    });
   } catch (err) {
-    console.error("Login error:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Internal server error." }),
-    };
+    console.error("login: unexpected error", err);
+    return json(500, {
+      error: "SERVER_ERROR",
+      message: "Unexpected error while logging in.",
+    });
   }
 };
+
+export default handler;
