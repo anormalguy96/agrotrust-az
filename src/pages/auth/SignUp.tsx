@@ -1,5 +1,3 @@
-// agrotrust-az/src/pages/auth/SignUp.tsx
-
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
@@ -8,13 +6,6 @@ import { ROUTES } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 import type { UserRole } from "@/app/providers/AuthProvider";
 
-/**
- * SignUp (MVP, now with real backend)
- *
- * - Sends registration data to Netlify function `register`
- * - Inserts user into Supabase
- * - Sends OTP email for verification
- */
 export function SignUp() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth(); // we don't sign in here, only after OTP verify
@@ -24,6 +15,10 @@ export function SignUp() {
   const [organisation, setOrganisation] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // NEW: phone fields
+  const [phoneCountry, setPhoneCountry] = useState("+994");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,7 +58,6 @@ export function SignUp() {
       return;
     }
 
-    // Very simple split: first token as first name, the rest as last name
     const [firstName, ...rest] = cleanedName.split(" ");
     const lastName = rest.join(" ") || firstName;
 
@@ -78,6 +72,8 @@ export function SignUp() {
           role,
           email: cleanedEmail,
           password: cleanedPassword,
+          phoneCountry,
+          phoneNumber,
         }),
       });
 
@@ -86,7 +82,6 @@ export function SignUp() {
         throw new Error(text || "Sign-up failed. Please try again.");
       }
 
-      // Success → go to OTP/verification screen
       navigate(ROUTES.AUTH.VERIFY_EMAIL, {
         replace: true,
         state: {
@@ -125,7 +120,7 @@ export function SignUp() {
               >
                 <option value="coop">Cooperative / Farmer</option>
                 <option value="buyer">Buyer / Importer</option>
-                <option value="admin">Admin (demo)</option>
+                {/* Admin must be seeded manually; we don't expose it here */}
               </select>
             </label>
 
@@ -165,6 +160,72 @@ export function SignUp() {
                 placeholder="name@company.com"
                 autoComplete="email"
               />
+            </label>
+
+            {/* NEW: phone country + number */}
+            <label className="auth-label">
+              Phone number (optional)
+              <div style={{ display: "flex", gap: "8px" }}>
+                <select
+                  className="input"
+                  style={{ maxWidth: "140px" }}
+                  value={phoneCountry}
+                  onChange={(e) => setPhoneCountry(e.target.value)}
+                >
+                  <option value="+994">🇦🇿 +994 (AZ)</option>
+                  <option value="+90">🇹🇷 +90 (TR)</option>
+                  <option value="+7">🇷🇺 +7 (RU)</option>
+                  <option value="+995">🇬🇪 +995 (GE)</option>
+                  <option value="+48">🇵🇱 +48 (PL)</option>
+                  <option value="+44">🇬🇧 +44 (UK)</option>
+                  <option value="+49">🇩🇪 +49 (DE)</option>
+                  <option value="+1">🇺🇸 +1 (US)</option>
+                  <option value="+33">🇫🇷 +33 (FR)</option>
+                  <option value="+39">🇮🇹 +39 (IT)</option>
+                  <option value="+971">🇦🇪 +971 (AE)</option>
+                  <option value="+998">🇺🇿 +998 (UZ)</option>
+                  <option value="+380">🇺🇦 +380 (UA)</option>
+                  <option value="+251">🇪🇹 +251 (ET)</option>
+                  <option value="+254">🇰🇪 +254 (KE)</option>
+                  <option value="+27">🇿🇦 +27 (ZA)</option>
+                  <option value="+55">🇧🇷 +55 (BR)</option>
+                  <option value="+52">🇲🇽 +52 (MX)</option>
+                  <option value="+91">🇮🇳 +91 (IN)</option>
+                  <option value="+86">🇨🇳 +86 (CN)</option>
+                  <option value="+82">🇰🇷 +82 (KR)</option>
+                  <option value="+66">🇹🇭 +66 (TH)</option>
+                  <option value="+84">🇻🇳 +84 (VN)</option> 
+                  <option value="+65">🇸🇬 +65 (SG)</option>
+                  <option value="+61">🇦🇺 +61 (AU)</option>
+                  <option value="+1">🇨🇦 +1 (CA)</option>
+                  <option value="+1">🇬🇧 +1 (US)</option>
+                  <option value="+1">🇪🇨 +1 (CA)</option>
+                  <option value="+1">🇦🇷 +1 (US)</option>
+                  <option value="+1">🇧🇷 +1 (US)</option>
+                  <option value="+1">🇨🇦 +1 (CA)</option>
+                  <option value="+1">🇨🇱 +1 (US)</option>
+                  <option value="+1">🇨🇴 +1 (US)</option>
+                  <option value="+1">🇵🇪 +1 (US)</option>
+                  <option value="+1">🇹🇼 +1 (US)</option>
+                  <option value="+1">🇺🇸 +1 (US)</option>
+                  <option value="+1">🇻🇦 +1 (US)</option>
+                  <option value="+1">🇻🇪 +1 (US)</option>
+                  <option value="+1">🇻🇳 +1 (US)</option>
+                  <option value="+1">🇼🇸 +1 (US)</option>
+                  <option value="+1">🇾🇪 +1 (US)</option>
+                  <option value="+1">🇾🇹 +1 (US)</option>
+                  <option value="+1">🇿🇼 +1 (US)</option>
+                  <option value="+1">🇿🇦 +1 (US)</option>
+                  <option value="+1">🇿🇲 +1 (US)</option>
+                </select>
+                <input
+                  className="input"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="50 123 45 67"
+                />
+              </div>
             </label>
 
             <label className="auth-label">

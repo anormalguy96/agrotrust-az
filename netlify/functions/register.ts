@@ -7,14 +7,54 @@ function generateOtp() {
   return String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
 }
 
+// only these roles are allowed via public sign-up
+const SAFE_ROLES = ["coop", "buyer"] as const;
+type SafeRole = (typeof SAFE_ROLES)[number];
+
+function normalizeRole(input: unknown): SafeRole {
+  let r = String(input || "").toLowerCase().trim();
+
+  // map a few possible labels to internal values
+  if (r === "cooperative" || r === "farmer" || r === "cooperative / farmer") {
+    r = "coop";
+  }
+  if (r === "buyer" || r === "importer" || r === "buyer / importer") {
+    r = "buyer";
+  }
+
+  if ((SAFE_ROLES as readonly string[]).includes(r)) {
+    return r as SafeRole;
+  }
+
+  // fallback – never "admin"
+  return "coop";
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
   try {
-    const body = JSON.parse(event.body || "{}");
-    const { firstName, lastName, role, email, password } = body;
+    const body = JSON.parse(event.body || "{}") as {
+      firstName?: string;
+      lastName?: string;
+      role?: string;
+      email?: string;
+      password?: string;
+      phoneCountry?: string;
+      phoneNumber?: string;
+    };
+
+    const {
+      firstName,
+      lastName,
+      role,
+      email,
+      password,
+      phoneCountry,
+      phoneNumber,
+    } = body;
 
     if (!firstName || !lastName || !role || !email || !password) {
       return { statusCode: 400, body: "Missing required fields" };
@@ -22,6 +62,23 @@ export const handler: Handler = async (event) => {
 
     const normalizedEmail = String(email).toLowerCase().trim();
     const passwordHash = await bcrypt.hash(password, 10);
+    const effectiveRole = normalizeRole(role);
+
+    // ---- phone normalisation (optional) ----
+    const rawPhoneCountry = (phoneCountry || "").trim();
+    const rawPhoneNumber = (phoneNumber || "").trim();
+
+    let phone: string | null = null;
+    if (rawPhoneCountry && rawPhoneNumber) {
+      const cc = rawPhoneCountry.startsWith("+")
+        ? rawPhoneCountry
+        : `+${rawPhoneCountry}`;
+      const num = rawPhoneNumber.replace(/[^\d]/g, ""); // digits only
+      if (num.length > 3) {
+        phone = `${cc}${num}`;
+      }
+    }
+    // ---------------------------------------
 
     // 1) Insert user
     const { data: user, error: userError } = await supabaseAdmin
@@ -29,9 +86,10 @@ export const handler: Handler = async (event) => {
       .insert({
         first_name: firstName,
         last_name: lastName,
-        role,
+        role: effectiveRole, // safe role
         email: normalizedEmail,
         password_hash: passwordHash,
+        phone, // may be null
       })
       .select("*")
       .single();

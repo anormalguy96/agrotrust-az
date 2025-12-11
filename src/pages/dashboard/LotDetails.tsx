@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
+import { PassportQR } from "@/features/passport/components/PassportQR";
 import { env } from "@/app/config/env";
 import { ROUTES } from "@/app/config/routes";
 
@@ -223,7 +224,7 @@ export function LotDetails() {
               setActionMsg(null);
               createPassportMutation.mutate(lot);
             }}
-            title="Creates a passport using the hackathon Netlify Function."
+            title="Creates a passport using the Netlify Function."
           >
             {createPassportMutation.isPending ? "Generating…" : "Generate passport"}
           </button>
@@ -353,7 +354,7 @@ export function LotDetails() {
                 <div className="passport-state">
                   <div className="passport-state__title">Passport linked</div>
                   <div className="muted">
-                    This lot now has a Digital Product Passport connected for the demo.
+                    This lot now has a Digital Product Passport connected.
                   </div>
                 </div>
 
@@ -362,12 +363,16 @@ export function LotDetails() {
                   <code className="passport-box__id">{effectivePassportId}</code>
 
                   {localPassport?.qrPayload && (
-                    <>
-                      <div className="passport-box__label">QR payload (MVP)</div>
-                      <code className="passport-box__payload">
-                        {localPassport.qrPayload}
-                      </code>
-                    </>
+                    <div className="passport-qr">
+                      <div className="passport-box__label">Passport QR</div>
+                      <PassportQR
+                        data={localPassport.qrPayload}
+                        title="Digital Product Passport"
+                        subtitle="Scan to view this lot’s passport payload"
+                        size="md"
+                        showDataText={false}
+                      />
+                    </div>
                   )}
                 </div>
               </>
@@ -613,6 +618,14 @@ export function LotDetails() {
             font-size: var(--fs-1);
             white-space: pre-wrap;
             word-break: break-word;
+          }
+
+          .passport-qr{
+            margin-top: var(--space-3);
+            display:flex;
+            flex-direction: column;
+            gap: var(--space-2);
+            align-items: flex-start;
           }
 
           .passport-alert{

@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-
+import { AdminUserList } from "@/pages/admin/AdminUserList";
 import { ROUTES } from "@/app/config/routes";
 import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
 

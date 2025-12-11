@@ -34,10 +34,7 @@ export const env = {
   /**
    * Controls whether mock data paths should be used in the UI.
    */
-  enableMocks: toBoolean(
-    import.meta.env.VITE_ENABLE_MOCKS,
-    DEFAULTS.enableMocksFallback
-  ),
+  enableMocks: false,
 
   /**
    * Reserved for future auth integration.

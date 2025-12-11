@@ -2,22 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { env } from "@/app/config/env";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 
-/**
- * RFQs (Dashboard)
- *
- * Hackathon MVP:
- * - Uses mock lots + buyers when env.enableMocks is true
- * - Provides a lightweight RFQ creation panel (client-side only)
- * - Persists RFQs in localStorage for a smooth demo
- *
- * This page is intentionally self-contained until features/rfq is implemented.
- */
 
 type Lot = {
   id: string;
@@ -111,9 +101,34 @@ function mapRawLot(raw: RawLot): Lot {
   };
 }
 
-type RFQStatus = "draft" | "sent" | "answered" | "closed";
+async function fetchSampleLots(): Promise<Lot[]> {
+  const res = await fetch("/mock/sample-lots.json", {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to load sample lots.");
 
-type RFQ = {
+  const data = (await res.json()) as unknown;
+  if (!Array.isArray(data)) return [];
+
+  return (data as RawLot[])
+    .filter((item) => item && typeof item.id === "string")
+    .map(mapRawLot);
+}
+
+async function fetchSampleBuyers(): Promise<Buyer[]> {
+  const res = await fetch("/mock/sample-buyers.json", {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to load sample buyers.");
+  const data = (await res.json()) as unknown;
+  return Array.isArray(data) ? (data as Buyer[]) : [];
+}
+
+// ---------- RFQ types & backend mapping ----------
+
+export type RFQStatus = "draft" | "sent" | "answered" | "closed";
+
+export type RFQ = {
   id: string;
   createdAt: string;
   status: RFQStatus;
@@ -128,104 +143,131 @@ type RFQ = {
   preferredCertifications?: string[];
   regionPreference?: string;
 
-  // Optional linkage to an existing lot for the demo narrative
   lotId?: string;
-
   notes?: string;
 };
 
-const LS_KEY = "agrotrust_rfqs_v1";
+// Shape coming from Netlify rfq-list (very tolerant mapping)
+type RfqListRow = {
+  id?: string;
+  created_at?: string;
+  createdAt?: string;
+  status?: RFQStatus;
+  buyer_id?: string | null;
+  buyerId?: string | null;
+  buyer_name?: string | null;
+  buyerName?: string | null;
+  product?: string;
+  product_name?: string;
+  quantity_kg?: number;
+  quantityKg?: number;
+  target_price_per_kg?: number | null;
+  targetPricePerKg?: number | null;
+  region_preference?: string | null;
+  regionPreference?: string | null;
+  lot_id?: string | null;
+  lotId?: string | null;
+  preferred_certifications?: string[] | null;
+  preferredCertifications?: string[] | null;
+  notes?: string | null;
+};
 
-async function fetchSampleLots(): Promise<Lot[]> {
-  const res = await fetch("/mock/sample-lots.json", {
-    headers: { "Content-Type": "application/json" }
+function mapRfqRow(row: RfqListRow): RFQ {
+  return {
+    id: row.id ?? "",
+    createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+    status: (row.status ?? "draft") as RFQStatus,
+    buyerId: row.buyer_id ?? row.buyerId ?? undefined,
+    buyerName: row.buyer_name ?? row.buyerName ?? undefined,
+    product: row.product ?? row.product_name ?? "",
+    quantityKg: row.quantity_kg ?? row.quantityKg ?? 0,
+    targetPricePerKg:
+      row.target_price_per_kg ?? row.targetPricePerKg ?? undefined,
+    regionPreference:
+      row.region_preference ?? row.regionPreference ?? undefined,
+    lotId: row.lot_id ?? row.lotId ?? undefined,
+    preferredCertifications:
+      row.preferred_certifications ?? row.preferredCertifications ?? undefined,
+    notes: row.notes ?? undefined,
+  };
+}
+
+// ---------- Backend calls ----------
+
+async function fetchRfqs(): Promise<RFQ[]> {
+  const res = await fetch("/.netlify/functions/rfq-list", {
+    headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error("Failed to load sample lots.");
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || "Failed to load RFQs.");
+  }
 
   const data = (await res.json()) as unknown;
-
   if (!Array.isArray(data)) return [];
-
-  return (data as RawLot[])
-    .filter((item) => item && typeof item.id === "string")
-    .map(mapRawLot);
+  return (data as RfqListRow[]).map(mapRfqRow);
 }
 
-async function fetchSampleBuyers(): Promise<Buyer[]> {
-  const res = await fetch("/mock/sample-buyers.json", {
-    headers: { "Content-Type": "application/json" }
+type CreateRfqInput = {
+  buyerId?: string;
+  buyerName?: string;
+  product: string;
+  quantityKg: number;
+  targetPricePerKg?: number;
+  regionPreference?: string;
+  lotId?: string;
+  preferredCertifications?: string[];
+  notes?: string;
+};
+
+async function createRfq(input: CreateRfqInput): Promise<RFQ> {
+  const res = await fetch("/.netlify/functions/rfq-create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      buyerId: input.buyerId ?? null,
+      buyerName: input.buyerName ?? null,
+      product: input.product,
+      quantityKg: input.quantityKg,
+      targetPricePerKg: input.targetPricePerKg ?? null,
+      regionPreference: input.regionPreference ?? null,
+      lotId: input.lotId ?? null,
+      preferredCertifications: input.preferredCertifications ?? [],
+      notes: input.notes ?? null,
+    }),
   });
-  if (!res.ok) throw new Error("Failed to load sample buyers.");
-  const data = (await res.json()) as unknown;
-  return Array.isArray(data) ? (data as Buyer[]) : [];
-}
 
-function seedRfqs(): RFQ[] {
-  const now = new Date();
-  const d1 = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 5);
-  const d2 = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 2);
-
-  return [
-    {
-      id: "RFQ-0001",
-      createdAt: d1.toISOString(),
-      status: "sent",
-      buyerId: "BUY-001",
-      buyerName: "Gulf Fresh Procurement",
-      product: "Tomatoes",
-      quantityKg: 12000,
-      targetPricePerKg: 1.35,
-      preferredCertifications: ["GlobalG.A.P"],
-      regionPreference: "Aran",
-      notes:
-        "First-season trial lots. Preference for consistent harvest windows and passport availability."
-    },
-    {
-      id: "RFQ-0002",
-      createdAt: d2.toISOString(),
-      status: "draft",
-      buyerId: "BUY-002",
-      buyerName: "Caspian Retail Partners",
-      product: "Hazelnuts",
-      quantityKg: 8000,
-      targetPricePerKg: 4.1,
-      preferredCertifications: ["Organic (claimed)"],
-      regionPreference: "Ganja-Gazakh",
-      notes:
-        "Looking for mid-volume supply with clear input declarations and cooperative-level readiness."
-    }
-  ];
-}
-
-function loadFromStorage(): RFQ[] {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed as RFQ[];
-  } catch {
-    return [];
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || "Failed to create RFQ.");
   }
+
+  const data = (await res.json()) as RfqListRow;
+  return mapRfqRow(data);
 }
 
-function saveToStorage(items: RFQ[]) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(items));
-  } catch {
-    // ignore in MVP
+type UpdateRfqStatusInput = {
+  id: string;
+  status: RFQStatus;
+};
+
+async function updateRfqStatus(
+  input: UpdateRfqStatusInput
+): Promise<RFQ> {
+  const res = await fetch("/.netlify/functions/rfq-update-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || "Failed to update RFQ status.");
   }
-}
 
-function nextRfqId(existing: RFQ[]) {
-  // Simple incremental ID based on existing max
-  const nums = existing
-    .map((r) => Number(String(r.id).replace(/[^\d]/g, "")))
-    .filter((n) => Number.isFinite(n));
-
-  const max = nums.length ? Math.max(...nums) : 0;
-  const next = max + 1;
-  return `RFQ-${String(next).padStart(4, "0")}`;
+  const data = (await res.json()) as RfqListRow;
+  return mapRfqRow(data);
 }
 
 function statusLabel(s: RFQStatus) {
@@ -241,54 +283,52 @@ function statusLabel(s: RFQStatus) {
   }
 }
 
+// ---------- Component ----------
+
 export function RFQs() {
   const { user, getRoleLabel } = useAuth();
+  const queryClient = useQueryClient();
 
   const canCreate = user?.role === "buyer" || user?.role === "admin";
 
+  // Supporting mock data for select options (only when env.enableMocks is true)
   const lotsQuery = useQuery({
     queryKey: ["lots", "sample", "rfq"],
     queryFn: fetchSampleLots,
-    enabled: env.enableMocks
+    enabled: env.enableMocks,
   });
 
   const buyersQuery = useQuery({
     queryKey: ["buyers", "sample", "rfq"],
     queryFn: fetchSampleBuyers,
-    enabled: env.enableMocks
+    enabled: env.enableMocks,
   });
 
   const lots = lotsQuery.data ?? [];
   const buyers = buyersQuery.data ?? [];
 
+  // RFQs from backend
+  const rfqsQuery = useQuery({
+    queryKey: ["rfqs"],
+    queryFn: fetchRfqs,
+  });
+
+  const rfqs = rfqsQuery.data ?? [];
+
   const productOptions = useMemo(() => {
     const set = new Set<string>();
     for (const l of lots) if (l.product) set.add(l.product);
-    // Fallback list for when mocks are off or empty
-    const base = Array.from(set);
-    if (base.length === 0) {
-      base.push("Tomatoes", "Hazelnuts", "Persimmons");
-    }
-    return base.sort();
+    return Array.from(set).sort();
   }, [lots]);
 
   const regionOptions = useMemo(() => {
     const set = new Set<string>();
     for (const l of lots) if (l.region) set.add(l.region);
-    const list = Array.from(set).sort();
-    if (list.length === 0) {
-      list.push("Aran", "Ganja-Gazakh", "Lankaran-Astara", "Shaki-Zagatala");
-    }
-    return list;
+    return Array.from(set).sort();
   }, [lots]);
 
   const buyerOptions = useMemo(() => {
-    if (buyers.length === 0) {
-      return [
-        { id: "BUY-001", name: "Gulf Fresh Procurement" },
-        { id: "BUY-002", name: "Caspian Retail Partners" }
-      ];
-    }
+    if (buyers.length === 0) return [];
     return buyers.map((b) => ({ id: b.id, name: b.name }));
   }, [buyers]);
 
@@ -296,8 +336,6 @@ export function RFQs() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<RFQStatus | "all">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
-
-  const [rfqs, setRfqs] = useState<RFQ[]>([]);
 
   // Create form state
   const [buyerId, setBuyerId] = useState<string>("");
@@ -309,40 +347,42 @@ export function RFQs() {
   const [notes, setNotes] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = loadFromStorage();
-    const merged = [...seedRfqs(), ...stored];
+  const createMutation = useMutation({
+    mutationFn: createRfq,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rfqs"] });
+      resetForm();
+      setShowCreate(false);
+    },
+    onError: (err: unknown) => {
+      const msg =
+        err instanceof Error ? err.message : "Failed to create RFQ.";
+      setFormError(msg);
+    },
+  });
 
-    // De-duplicate by id
-    const map = new Map<string, RFQ>();
-    for (const r of merged) map.set(r.id, r);
-
-    const list = Array.from(map.values()).sort(
-      (a, b) => (a.createdAt < b.createdAt ? 1 : -1)
-    );
-
-    setRfqs(list);
-  }, []);
-
-  useEffect(() => {
-    // Save only non-seed items? For simplicity, save everything currently in state.
-    // This keeps the demo deterministic across refresh.
-    if (rfqs.length) saveToStorage(rfqs);
-  }, [rfqs]);
+  const updateStatusMutation = useMutation({
+    mutationFn: updateRfqStatus,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rfqs"] });
+    },
+  });
 
   useEffect(() => {
     // Default selections when opening create panel
     if (!showCreate) return;
 
-    if (!buyerId && user?.role === "buyer") {
-      // If a buyer is signed in without a known ID, select first option
-      setBuyerId(buyerOptions[0]?.id ?? "");
-    } else if (!buyerId) {
-      setBuyerId(buyerOptions[0]?.id ?? "");
+    if (!buyerId && buyerOptions.length > 0) {
+      setBuyerId(buyerOptions[0].id);
     }
 
-    if (!product) setProduct(productOptions[0] ?? "");
-    if (!regionPreference) setRegionPreference(regionOptions[0] ?? "");
+    if (!product && productOptions.length > 0) {
+      setProduct(productOptions[0]);
+    }
+
+    if (!regionPreference && regionOptions.length > 0) {
+      setRegionPreference(regionOptions[0]);
+    }
   }, [
     showCreate,
     buyerId,
@@ -351,7 +391,6 @@ export function RFQs() {
     buyerOptions,
     productOptions,
     regionOptions,
-    user?.role
   ]);
 
   const filtered = useMemo(() => {
@@ -371,7 +410,7 @@ export function RFQs() {
         r.product,
         r.regionPreference,
         r.notes,
-        ...(r.preferredCertifications ?? [])
+        ...(r.preferredCertifications ?? []),
       ]
         .filter(Boolean)
         .join(" ")
@@ -414,10 +453,7 @@ export function RFQs() {
     const buyerRecord = buyerOptions.find((b) => b.id === buyerId);
     const selectedLot = lots.find((l) => l.id === lotId);
 
-    const newRfq: RFQ = {
-      id: nextRfqId(rfqs),
-      createdAt: new Date().toISOString(),
-      status: "draft",
+    createMutation.mutate({
       buyerId: buyerRecord?.id,
       buyerName: buyerRecord?.name,
       product: product.trim(),
@@ -426,24 +462,22 @@ export function RFQs() {
       regionPreference: regionPreference.trim() || undefined,
       lotId: selectedLot?.id || undefined,
       preferredCertifications:
-        selectedLot?.certifications?.length ? selectedLot.certifications : undefined,
-      notes: notes.trim() || undefined
-    };
-
-    setRfqs((prev) => [newRfq, ...prev]);
-    resetForm();
-    setShowCreate(false);
+        selectedLot?.certifications?.length
+          ? selectedLot.certifications
+          : undefined,
+      notes: notes.trim() || undefined,
+    });
   }
 
   function updateStatus(id: string, status: RFQStatus) {
-    setRfqs((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status } : r))
-    );
+    updateStatusMutation.mutate({ id, status });
   }
 
   const lotOptionsForProduct = useMemo(() => {
     if (!product) return lots;
-    return lots.filter((l) => l.product?.toLowerCase() === product.toLowerCase());
+    return lots.filter(
+      (l) => l.product?.toLowerCase() === product.toLowerCase()
+    );
   }, [lots, product]);
 
   return (
@@ -453,7 +487,7 @@ export function RFQs() {
           <p className="dash-kicker">Market access</p>
           <h1 className="dash-title">RFQs</h1>
           <p className="muted rfq-subtitle">
-            Prototype request-for-quotation flows that link buyer expectations
+            Manage live request-for-quotation flows that link buyer expectations
             to cooperative lots, Passports, and the escrow narrative.
           </p>
           <p className="muted rfq-subtitle">
@@ -475,7 +509,7 @@ export function RFQs() {
             }}
             title={
               canCreate
-                ? "Create a client-side RFQ for the demo."
+                ? "Create a server-backed RFQ."
                 : "Only buyer or admin roles can create RFQs."
             }
           >
@@ -488,20 +522,22 @@ export function RFQs() {
         <section className="rfq-create card card--soft">
           <div className="rfq-create__head">
             <div>
-              <div className="rfq-create__label">New RFQ (MVP)</div>
+              <div className="rfq-create__label">New RFQ</div>
               <div className="rfq-create__title">
                 Capture buyer intent in a structured, export-ready format
               </div>
               <div className="muted">
-                This form is client-side only. It is designed to support your
-                judging narrative rather than provide a full procurement engine.
+                This RFQ is persisted in the AgroTrust backend so you can reuse
+                it across sessions and link it to real contracts.
               </div>
             </div>
             <div className="rfq-create__meta">
               <div className="rfq-meta-box">
-                <span className="rfq-meta-box__label">Data source</span>
+                <span className="rfq-meta-box__label">Lots / buyers source</span>
                 <span className="rfq-meta-box__value">
-                  {env.enableMocks ? "Mock lots + buyers" : "Local input"}
+                  {env.enableMocks
+                    ? "Mock lots + buyers (dev)"
+                    : "Backend-managed"}
                 </span>
               </div>
               <div className="rfq-meta-box">
@@ -518,6 +554,9 @@ export function RFQs() {
                 value={buyerId}
                 onChange={(e) => setBuyerId(e.target.value)}
               >
+                {buyerOptions.length === 0 && (
+                  <option value="">No buyers configured</option>
+                )}
                 {buyerOptions.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
@@ -535,6 +574,9 @@ export function RFQs() {
                   setLotId("");
                 }}
               >
+                {productOptions.length === 0 && (
+                  <option value="">No products available</option>
+                )}
                 {productOptions.map((p) => (
                   <option key={p} value={p}>
                     {p}
@@ -605,9 +647,7 @@ export function RFQs() {
             </label>
 
             {formError && (
-              <div className="rfq-alert rfq-alert--error">
-                {formError}
-              </div>
+              <div className="rfq-alert rfq-alert--error">{formError}</div>
             )}
 
             <div className="rfq-form__actions">
@@ -615,8 +655,9 @@ export function RFQs() {
                 type="button"
                 className="btn btn--primary"
                 onClick={handleCreateRfq}
+                disabled={createMutation.isPending}
               >
-                Save RFQ
+                {createMutation.isPending ? "Saving…" : "Save RFQ"}
               </button>
               <button
                 type="button"
@@ -649,7 +690,9 @@ export function RFQs() {
             Status
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as RFQStatus | "all")}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as RFQStatus | "all")
+              }
             >
               <option value="all">All statuses</option>
               <option value="draft">Draft</option>
@@ -677,7 +720,9 @@ export function RFQs() {
           <div className="rfq-meta">
             <div className="rfq-meta__item">
               <span className="rfq-meta__label">Total</span>
-              <span className="rfq-meta__value">{rfqs.length}</span>
+              <span className="rfq-meta__value">
+                {rfqsQuery.isLoading ? "…" : rfqs.length}
+              </span>
             </div>
             <div className="rfq-meta__item">
               <span className="rfq-meta__label">Filtered</span>
@@ -686,7 +731,7 @@ export function RFQs() {
             <div className="rfq-meta__item">
               <span className="rfq-meta__label">Mocks</span>
               <span className="rfq-meta__value">
-                {env.enableMocks ? "On" : "Off"}
+                {env.enableMocks ? "On (lots/buyers)" : "Off"}
               </span>
             </div>
           </div>
@@ -694,11 +739,27 @@ export function RFQs() {
       </section>
 
       <section className="rfq-table card">
-        {(lotsQuery.isLoading || buyersQuery.isLoading) && env.enableMocks && (
+        {rfqsQuery.isLoading && (
           <div className="rfq-state">
-            <p>Loading supporting data…</p>
+            <p>Loading RFQs…</p>
           </div>
         )}
+
+        {rfqsQuery.isError && (
+          <div className="rfq-state">
+            <p className="muted">
+              {(rfqsQuery.error as Error)?.message ??
+                "Failed to load RFQs from backend."}
+            </p>
+          </div>
+        )}
+
+        {(lotsQuery.isLoading || buyersQuery.isLoading) &&
+          env.enableMocks && (
+            <div className="rfq-state">
+              <p>Loading supporting data…</p>
+            </div>
+          )}
 
         {(lotsQuery.isError || buyersQuery.isError) && env.enableMocks && (
           <div className="rfq-state">
@@ -719,100 +780,111 @@ export function RFQs() {
           </div>
         )}
 
-        {filtered.length === 0 && (
+        {!rfqsQuery.isLoading && !rfqsQuery.isError && filtered.length === 0 && (
           <div className="rfq-state">
             <p className="muted">No RFQs match your filters.</p>
           </div>
         )}
 
-        {filtered.length > 0 && (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>RFQ ID</th>
-                <th>Buyer</th>
-                <th>Product</th>
-                <th>Quantity</th>
-                <th>Target price</th>
-                <th>Region</th>
-                <th>Linked lot</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <code className="rfq-code">{r.id}</code>
-                  </td>
-                  <td>{r.buyerName ?? "—"}</td>
-                  <td>{r.product}</td>
-                  <td>{r.quantityKg} kg</td>
-                  <td>
-                    {typeof r.targetPricePerKg === "number"
-                      ? `${r.targetPricePerKg.toFixed(2)}`
-                      : "—"}
-                  </td>
-                  <td>{r.regionPreference ?? "—"}</td>
-                  <td>
-                    {r.lotId ? (
-                      <NavLink
-                        to={lotDetailsPath(r.lotId)}
-                        className="rfq-lot-link"
-                        title="Open linked lot"
-                      >
-                        {r.lotId}
-                      </NavLink>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <span className={`rfq-pill rfq-pill--${r.status}`}>
-                      {statusLabel(r.status)}
-                    </span>
-                  </td>
-                  <td className="muted">
-                    {new Date(r.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="rfq-actions-cell">
-                    <div className="rfq-row-actions">
-                      <button
-                        type="button"
-                        className="btn btn--ghost rfq-mini-btn"
-                        onClick={() => updateStatus(r.id, "sent")}
-                        disabled={r.status !== "draft"}
-                        title="Mark as sent"
-                      >
-                        Send
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost rfq-mini-btn"
-                        onClick={() => updateStatus(r.id, "answered")}
-                        disabled={r.status !== "sent"}
-                        title="Mark as answered"
-                      >
-                        Answer
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn--ghost rfq-mini-btn"
-                        onClick={() => updateStatus(r.id, "closed")}
-                        disabled={r.status === "closed"}
-                        title="Close RFQ"
-                      >
-                        Close
-                      </button>
-                    </div>
-                  </td>
+        {!rfqsQuery.isLoading &&
+          !rfqsQuery.isError &&
+          filtered.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>RFQ ID</th>
+                  <th>Buyer</th>
+                  <th>Product</th>
+                  <th>Quantity</th>
+                  <th>Target price</th>
+                  <th>Region</th>
+                  <th>Linked lot</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <code className="rfq-code">{r.id}</code>
+                    </td>
+                    <td>{r.buyerName ?? "—"}</td>
+                    <td>{r.product}</td>
+                    <td>{r.quantityKg} kg</td>
+                    <td>
+                      {typeof r.targetPricePerKg === "number"
+                        ? r.targetPricePerKg.toFixed(2)
+                        : "—"}
+                    </td>
+                    <td>{r.regionPreference ?? "—"}</td>
+                    <td>
+                      {r.lotId ? (
+                        <NavLink
+                          to={lotDetailsPath(r.lotId)}
+                          className="rfq-lot-link"
+                          title="Open linked lot"
+                        >
+                          {r.lotId}
+                        </NavLink>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td>
+                      <span className={`rfq-pill rfq-pill--${r.status}`}>
+                        {statusLabel(r.status)}
+                      </span>
+                    </td>
+                    <td className="muted">
+                      {new Date(r.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="rfq-actions-cell">
+                      <div className="rfq-row-actions">
+                        <button
+                          type="button"
+                          className="btn btn--ghost rfq-mini-btn"
+                          onClick={() => updateStatus(r.id, "sent")}
+                          disabled={
+                            r.status !== "draft" ||
+                            updateStatusMutation.isPending
+                          }
+                          title="Mark as sent"
+                        >
+                          Send
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost rfq-mini-btn"
+                          onClick={() => updateStatus(r.id, "answered")}
+                          disabled={
+                            r.status !== "sent" ||
+                            updateStatusMutation.isPending
+                          }
+                          title="Mark as answered"
+                        >
+                          Answer
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost rfq-mini-btn"
+                          onClick={() => updateStatus(r.id, "closed")}
+                          disabled={
+                            r.status === "closed" ||
+                            updateStatusMutation.isPending
+                          }
+                          title="Close RFQ"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
       </section>
 
       <section className="rfq-foot card card--soft">

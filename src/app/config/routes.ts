@@ -31,7 +31,8 @@ export const ROUTES = {
     BUYERS: "/dashboard/buyers",
     RFQS: "/dashboard/rfqs",
     CONTRACTS: "/dashboard/contracts",
-    SETTINGS: "/dashboard/settings"
+    SETTINGS: "/dashboard/settings",
+    ADMIN_USERS: "/dashboard/admin/users"
   }
 } as const;
 
