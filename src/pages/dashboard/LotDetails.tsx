@@ -32,7 +32,6 @@ type PassportCreateResponse = {
   status?: "created" | "linked";
 };
 
-// Same raw shape as sample-lots.json
 type RawLot = {
   id: string;
   coopId?: string;
@@ -124,18 +123,24 @@ async function fetchLotById(lotId: string): Promise<Lot | null> {
     return lots.find((l) => l.id === lotId) ?? null;
   }
 
-  // Future real API path (kept conservative for MVP)
   const res = await fetch(`/api/lots/${encodeURIComponent(lotId)}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error("Failed to load lot.");
   return (await res.json()) as Lot;
 }
 
-async function createPassportForLot(lotId: string): Promise<PassportCreateResponse> {
+async function createPassportForLot(lot: Lot): Promise<PassportCreateResponse> {
   const res = await fetch("/.netlify/functions/passport-create", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ lotId })
+    body: JSON.stringify({
+      lotId: lot.id,
+      cooperativeId: lot.cooperativeId ?? lot.coopId ?? "demo-coop-001",
+      productName: lot.product,
+      variety: lot.variety,
+      region: lot.region,
+      certifications: lot.certifications ?? [],
+    }),
   });
 
   if (!res.ok) {
