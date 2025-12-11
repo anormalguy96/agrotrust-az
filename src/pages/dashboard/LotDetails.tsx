@@ -5,7 +5,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { env } from "@/app/config/env";
 import { ROUTES } from "@/app/config/routes";
 
-
 type Lot = {
   id: string;
   product: string;
@@ -66,7 +65,7 @@ function mapRawLot(raw: RawLot): Lot {
 
   const certifications: string[] = [
     ...(raw.certifications?.claimed ?? []),
-    ...(raw.certifications?.verified ?? []),
+    ...(raw.certifications?.verified ?? [])
   ];
 
   let status: Lot["status"] = "draft";
@@ -96,13 +95,13 @@ function mapRawLot(raw: RawLot): Lot {
     passportId: null,
     status,
     notes: undefined,
-    photos: [],
+    photos: []
   };
 }
 
 async function fetchSampleLots(): Promise<Lot[]> {
   const res = await fetch("/mock/sample-lots.json", {
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" }
   });
 
   if (!res.ok) throw new Error("Failed to load sample lots.");
@@ -129,6 +128,12 @@ async function fetchLotById(lotId: string): Promise<Lot | null> {
   return (await res.json()) as Lot;
 }
 
+/**
+ * IMPORTANT:
+ * This body structure matches what the Netlify `passport-create`
+ * function validates: it wants `cooperativeId` and a nested
+ * `product` object with `name`, etc.
+ */
 async function createPassportForLot(lot: Lot): Promise<PassportCreateResponse> {
   const res = await fetch("/.netlify/functions/passport-create", {
     method: "POST",
@@ -136,11 +141,18 @@ async function createPassportForLot(lot: Lot): Promise<PassportCreateResponse> {
     body: JSON.stringify({
       lotId: lot.id,
       cooperativeId: lot.cooperativeId ?? lot.coopId ?? "demo-coop-001",
-      productName: lot.product,
-      variety: lot.variety,
-      region: lot.region,
-      certifications: lot.certifications ?? [],
-    }),
+      product: {
+        name: lot.product,
+        variety: lot.variety,
+        quantity: lot.quantityKg,
+        unit: "kg"
+      },
+      harvest: {
+        region: lot.region,
+        harvestDate: lot.harvestDate
+      },
+      certifications: lot.certifications ?? []
+    })
   });
 
   if (!res.ok) {
@@ -161,21 +173,15 @@ export function LotDetails() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const lotQuery = useQuery({
-  queryKey: ["lot", lotId, env.enableMocks ? "mock" : "api"],
-  queryFn: () => fetchLotById(lotId),
-  enabled: Boolean(lotId),
-});
+    queryKey: ["lot", lotId, env.enableMocks ? "mock" : "api"],
+    queryFn: () => fetchLotById(lotId),
+    enabled: Boolean(lotId)
+  });
 
-  // lot is derived from the query
   const lot = lotQuery.data ?? null;
 
   const createPassportMutation = useMutation({
-    mutationFn: () => {
-      if (!lot) {
-        throw new Error("Lot is not loaded yet.");
-      }
-      return createPassportForLot(lot);   // ✅ pass the actual Lot
-    },
+    mutationFn: (lotArg: Lot) => createPassportForLot(lotArg),
     onSuccess: (data) => {
       setLocalPassport(data);
       setActionMsg("Passport created and linked for the demo.");
@@ -186,7 +192,6 @@ export function LotDetails() {
       setActionMsg(msg);
     }
   });
-
 
   const effectivePassportId = useMemo(() => {
     return localPassport?.passportId || lot?.passportId || null;
@@ -216,13 +221,18 @@ export function LotDetails() {
             className="btn btn--primary"
             disabled={!lot || createPassportMutation.isPending}
             onClick={() => {
+              if (!lot) return;
               setActionMsg(null);
-              createPassportMutation.mutate();
+              createPassportMutation.mutate(lot);
             }}
+            title="Creates a passport using the hackathon Netlify Function."
           >
-            {createPassportMutation.isPending ? "Generating…" : "Generate passport"}
+            {createPassportMutation.isPending
+              ? "Generating…"
+              : effectivePassportId
+              ? "Regenerate (MVP)"
+              : "Generate passport"}
           </button>
-
         </div>
       </header>
 
