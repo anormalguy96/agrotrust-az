@@ -1,66 +1,74 @@
-// agrotrust-az/src/pages/marketing/Contact.tsx
-
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 
 import { BRAND } from "@/app/config/constants";
 import { ROUTES } from "@/app/config/routes";
 
-/**
- * Contact (Marketing)
- *
- * Hackathon-friendly contact page.
- * This does not send real emails yet.
- * It provides a clean UI and a realistic B2B enquiry form.
- *
- * Later upgrade options:
- * - Netlify Forms
- * - A Netlify Function (contact-submit.ts)
- * - A real CRM integration
- */
+type Audience = "coop" | "buyer" | "other";
+
+
 export function Contact() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
-  const [audience, setAudience] = useState<"coop" | "buyer" | "other">("coop");
+  const [audience, setAudience] = useState<Audience>("coop");
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+
+  const [status, setStatus] = useState<
+    "idle" | "sending" | "success" | "error"
+  >("idle");
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit =
     name.trim().length > 0 &&
     email.trim().length > 0 &&
     message.trim().length > 10;
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!canSubmit) {
       setStatus("error");
+      setError("Please fill in your name, email, and a slightly longer message.");
       return;
     }
 
-    // MVP behaviour: simulate a successful submission locally.
-    // This keeps the demo clean without requiring an email backend.
+    setStatus("sending");
+    setError(null);
+
     try {
-      // eslint-disable-next-line no-console
-      console.log("AgroTrust contact payload", {
-        name,
-        company,
-        email,
-        audience,
-        message
+      const res = await fetch("/.netlify/functions/contact-submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          company,
+          email,
+          audience,
+          message,
+        }),
       });
 
-      setStatus("success");
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Contact submit failed:", res.status, text);
+        throw new Error(text || "Failed to submit contact form");
+      }
 
-      // Optional: clear fields for a polished demo feel
+      setStatus("success");
+      setError(null);
+
       setName("");
       setCompany("");
       setEmail("");
       setAudience("coop");
       setMessage("");
-    } catch {
+    } catch (err) {
+      console.error("Contact submit error:", err);
       setStatus("error");
+      setError("Something went wrong while sending your message. Please try again.");
     }
   }
 
@@ -69,23 +77,23 @@ export function Contact() {
       <header className="marketing-page-head">
         <p className="marketing-kicker">Get in touch</p>
         <h1 className="marketing-title">Contact {BRAND.productName}</h1>
-        <p className="marketing-subtitle muted">
+        <p className="marketing-subtitle">
           Whether you represent a cooperative preparing for export or a buyer
           seeking verified suppliers, we would like to hear your requirements.
-          This is a hackathon MVP contact flow with realistic B2B framing.
+          This is now a real enquiry channel, not just a demo.
         </p>
       </header>
 
       <section className="contact-grid">
         <div className="card">
-          <h3>Send an enquiry</h3>
+          <h2>Send an enquiry</h2>
           <p className="muted">
             Share your expectations for traceability, quality evidence, volume,
             and target markets. The more specific you are, the stronger the
             matching logic we can build next.
           </p>
 
-          <form onSubmit={handleSubmit} className="contact-form">
+          <form className="contact-form" onSubmit={handleSubmit}>
             <label className="contact-label">
               Your name
               <input
@@ -123,9 +131,10 @@ export function Contact() {
             <label className="contact-label">
               I am a
               <select
+                className="input"
                 value={audience}
                 onChange={(e) =>
-                  setAudience(e.target.value as "coop" | "buyer" | "other")
+                  setAudience(e.target.value as Audience)
                 }
               >
                 <option value="coop">Farmer / Cooperative</option>
@@ -134,9 +143,11 @@ export function Contact() {
               </select>
             </label>
 
-            <label className="contact-label">
+            <label className="contact-label" style={{ gridColumn: "1 / -1" }}>
               Message
               <textarea
+                className="input"
+                rows={5}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Tell us your needs: products, volumes, certifications, markets..."
@@ -145,14 +156,15 @@ export function Contact() {
 
             {status === "success" && (
               <div className="contact-alert contact-alert--success">
-                Your message is captured for the demo. In a real release, this
-                will be routed to the team.
+                Your message has been sent. We&apos;ll follow up from
+                agrotrust.az@gmail.com.
               </div>
             )}
 
             {status === "error" && (
               <div className="contact-alert contact-alert--error">
-                Please fill in your name, email, and a slightly longer message.
+                {error ??
+                  "Please check your details and try again."}
               </div>
             )}
 
@@ -160,13 +172,13 @@ export function Contact() {
               <button
                 type="submit"
                 className="btn btn--primary"
-                disabled={!canSubmit}
+                disabled={!canSubmit || status === "sending"}
               >
-                Submit enquiry
+                {status === "sending" ? "Sending…" : "Submit enquiry"}
               </button>
 
-              <NavLink to={ROUTES.HOW_IT_WORKS} className="btn btn--ghost">
-                Review the flow
+              <NavLink to={ROUTES.FOR_FARMERS} className="btn btn--ghost">
+                Farmer pathway
               </NavLink>
             </div>
           </form>
@@ -191,13 +203,13 @@ export function Contact() {
           <div className="card card--soft">
             <div className="aside-label">MVP note</div>
             <p className="muted">
-              This contact form is part of the hackathon demo. It is designed to
-              show stakeholder intent and product maturity. You can later enable:
+              This contact form was originally a mock. It now routes to the
+              AgroTrust team inbox while keeping the MVP architecture.
             </p>
             <ul className="contact-list">
-              <li>Netlify Forms for zero-backend submissions</li>
-              <li>A dedicated Netlify Function endpoint</li>
-              <li>CRM integration for export pipelines</li>
+              <li>SMTP-based email via Netlify Functions</li>
+              <li>Reuses the same mailer as OTP verification</li>
+              <li>Ready for future CRM integration</li>
             </ul>
           </div>
 
@@ -217,6 +229,7 @@ export function Contact() {
             max-width: 860px;
             margin-bottom: var(--space-6);
           }
+
           .marketing-kicker{
             margin: 0 0 var(--space-2);
             font-size: var(--fs-1);
@@ -224,11 +237,13 @@ export function Contact() {
             text-transform: uppercase;
             color: var(--color-text-soft);
           }
+
           .marketing-title{
             margin: 0 0 var(--space-2);
             font-size: var(--fs-7);
             line-height: var(--lh-tight);
           }
+
           .marketing-subtitle{
             margin: 0;
             font-size: var(--fs-4);
@@ -256,14 +271,6 @@ export function Contact() {
             color: var(--color-text);
           }
 
-          .contact-label:nth-child(5){
-            grid-column: 1 / -1;
-          }
-
-          .contact-label textarea{
-            grid-column: 1 / -1;
-          }
-
           .contact-alert{
             grid-column: 1 / -1;
             padding: var(--space-3);
@@ -271,9 +278,11 @@ export function Contact() {
             border: var(--border-1);
             font-size: var(--fs-2);
           }
+
           .contact-alert--success{
             background: color-mix(in oklab, var(--color-success) 10%, transparent);
           }
+
           .contact-alert--error{
             background: color-mix(in oklab, var(--color-danger) 10%, transparent);
           }
@@ -314,6 +323,7 @@ export function Contact() {
             font-size: var(--fs-2);
             color: var(--color-text);
           }
+
           .contact-link:hover{
             text-decoration: none;
             border-color: var(--color-border-strong);
@@ -338,6 +348,7 @@ export function Contact() {
             .contact-grid{
               grid-template-columns: 1fr;
             }
+
             .contact-form{
               grid-template-columns: 1fr;
             }
