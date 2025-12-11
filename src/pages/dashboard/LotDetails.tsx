@@ -344,16 +344,24 @@ export function LotDetails() {
           <div className="card card--soft">
             <div className="aside-label">Passport status</div>
 
-            {!effectivePassportId && (
+            {!effectivePassportId && !localPassport && (
               <>
                 <div className="passport-state">
                   <div className="passport-state__title">Not created yet</div>
                   <div className="muted">
-                    Generate a Digital Product Passport to produce a buyer-friendly
-                    traceability summary with a QR payload.
+                    Generate a Digital Product Passport to produce a buyer-friendly traceability summary with a QR payload.
                   </div>
                 </div>
               </>
+            )}
+
+            {!effectivePassportId && localPassport && (
+              <div className="passport-state">
+                <div className="passport-state__title">Passport created (not persisted)</div>
+                <div className="muted">
+                  This passport exists for the demo, but will not appear in the Lots dashboard (mock data).
+                </div>
+              </div>
             )}
 
             {effectivePassportId && (
