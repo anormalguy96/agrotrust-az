@@ -39,9 +39,8 @@
   to     = "/.netlify/functions/health"
   status = 200
 
-# ❌ Disable SPA wildcard redirect for dev – it breaks Vite assets
-# [[redirects]]
-#   from   = "/*"
-#   to     = "/index.html"
-#   status = 200
-#   force  = true
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+  force  = true
