@@ -11,6 +11,7 @@ type Lot = {
   product: string;
   variety?: string;
   coopId?: string;
+  cooperativeId?: string;
   coopName?: string;
   region?: string;
   harvestDate?: string;
@@ -76,6 +77,7 @@ function mapRawLot(raw: RawLot): Lot {
     product: productName,
     variety,
     coopId: raw.coopId,
+    cooperativeId: raw.coopId,
     coopName: raw.harvest?.farmName,
     region: raw.harvest?.region,
     harvestDate: raw.harvest?.harvestDate,
