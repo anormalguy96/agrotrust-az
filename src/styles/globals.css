@@ -1,10 +1,11 @@
-/* agrotrust-az/src/styles/globals.css */
-
 @import "./tokens.css";
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
-/* ---------------------------
-   Base reset
----------------------------- */
+:root {
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
 
 *,
 *::before,
@@ -50,9 +51,14 @@ a:hover {
   text-decoration: underline;
 }
 
-/* ---------------------------
-   Layout utilities
----------------------------- */
+/* Ensure all controls inherit the Inter font */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 
 .container {
   max-width: var(--container-max);
@@ -68,11 +74,11 @@ a:hover {
 .app-shell {
   min-height: 100%;
   background: var(--color-bg);
+  /* Soft page fade-in on first render */
+  animation: app-fade-in 260ms var(--ease-1) 40ms both;
 }
 
-/* ---------------------------
-   Brand block
----------------------------- */
+
 
 .brand {
   display: flex;
@@ -95,9 +101,6 @@ a:hover {
   color: var(--color-text-muted);
 }
 
-/* ---------------------------
-   Buttons
----------------------------- */
 
 .btn {
   height: var(--btn-height);
@@ -109,25 +112,35 @@ a:hover {
   font-weight: var(--fw-medium);
   font-size: var(--fs-2);
   cursor: pointer;
-  transition: transform var(--duration-1) var(--ease-1),
+  transition:
+    transform var(--duration-1) var(--ease-1),
     border-color var(--duration-2) var(--ease-1),
     background var(--duration-2) var(--ease-1),
-    opacity var(--duration-2) var(--ease-1);
+    opacity var(--duration-2) var(--ease-1),
+    box-shadow var(--duration-2) var(--ease-1);
 }
 
 .btn:hover {
   transform: translateY(-1px);
   border-color: var(--color-border-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .btn:active {
   transform: translateY(0);
+  box-shadow: none;
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-primary) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .btn--primary {
@@ -161,16 +174,18 @@ a:hover {
   font-weight: var(--fw-medium);
   font-size: var(--fs-2);
   border: 1px solid transparent;
+  transition:
+    background var(--duration-2) var(--ease-1),
+    transform var(--duration-1) var(--ease-1);
 }
 
 .nav-link--cta:hover {
   background: var(--color-primary-strong);
   text-decoration: none;
+  transform: translateY(-1px);
 }
 
-/* ---------------------------
-   Inputs (basic)
----------------------------- */
+
 
 .input,
 select,
@@ -184,8 +199,10 @@ textarea {
   height: var(--input-height);
   font-size: var(--fs-2);
   outline: none;
-  transition: border-color var(--duration-2) var(--ease-1),
-    box-shadow var(--duration-2) var(--ease-1);
+  transition:
+    border-color var(--duration-2) var(--ease-1),
+    box-shadow var(--duration-2) var(--ease-1),
+    background var(--duration-2) var(--ease-1);
 }
 
 textarea {
@@ -198,12 +215,10 @@ textarea {
 select:focus,
 textarea:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 20%, transparent);
+  box-shadow: 0 0 0 3px
+    color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
 
-/* ---------------------------
-   Marketing layout
----------------------------- */
 
 .marketing-shell {
   display: flex;
@@ -246,11 +261,16 @@ textarea:focus {
   color: var(--color-text);
   padding: 6px 8px;
   border-radius: var(--radius-1);
+  transition:
+    background var(--duration-2) var(--ease-1),
+    color var(--duration-2) var(--ease-1),
+    transform var(--duration-1) var(--ease-1);
 }
 
 .nav-link:hover {
   background: var(--color-surface);
   text-decoration: none;
+  transform: translateY(-1px);
 }
 
 .nav-link.active {
@@ -285,16 +305,17 @@ textarea:focus {
 .footer-link {
   font-size: var(--fs-2);
   color: var(--color-text-muted);
+  transition:
+    color var(--duration-2) var(--ease-1),
+    transform var(--duration-1) var(--ease-1);
 }
 
 .footer-link:hover {
   color: var(--color-text);
   text-decoration: none;
+  transform: translateY(-1px);
 }
 
-/* ---------------------------
-   Dashboard layout
----------------------------- */
 
 .dashboard-shell {
   display: flex;
@@ -361,7 +382,6 @@ textarea:focus {
   background: var(--color-bg);
 }
 
-/* Sidebar navigation */
 
 .sidebar-nav {
   display: flex;
@@ -386,11 +406,16 @@ textarea:focus {
   border-radius: var(--radius-1);
   font-size: var(--fs-2);
   color: var(--color-text);
+  transition:
+    background var(--duration-2) var(--ease-1),
+    color var(--duration-2) var(--ease-1),
+    transform var(--duration-1) var(--ease-1);
 }
 
 .sidebar-link:hover {
   background: var(--color-elevated);
   text-decoration: none;
+  transform: translateY(-1px);
 }
 
 .sidebar-link.active {
@@ -398,20 +423,28 @@ textarea:focus {
   color: var(--color-primary);
 }
 
-/* ---------------------------
-   Cards and tables (basic)
----------------------------- */
-
 .card {
   background: var(--color-elevated);
   border: var(--border-1);
   border-radius: var(--radius-2);
   padding: var(--space-4);
   box-shadow: var(--shadow-1);
+  transition:
+    transform var(--duration-2) var(--ease-1),
+    box-shadow var(--duration-2) var(--ease-1),
+    border-color var(--duration-2) var(--ease-1),
+    background var(--duration-2) var(--ease-1);
 }
 
 .card--soft {
   background: var(--color-surface);
+}
+
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.32);
+  border-color: var(--color-border-strong);
 }
 
 .table {
@@ -440,9 +473,14 @@ textarea:focus {
   border-bottom: none;
 }
 
-/* ---------------------------
-   Responsive adjustments
----------------------------- */
+
+.table tbody tr:hover {
+  background: color-mix(
+    in oklab,
+    var(--color-primary) 6%,
+    var(--color-elevated)
+  );
+}
 
 @media (max-width: 1100px) {
   .marketing-header__inner {
@@ -482,5 +520,17 @@ textarea:focus {
 
   .marketing-main {
     padding: var(--space-5) 0;
+  }
+}
+
+
+@keyframes app-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
