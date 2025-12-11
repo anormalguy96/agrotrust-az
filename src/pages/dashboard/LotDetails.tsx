@@ -180,8 +180,14 @@ export function LotDetails() {
 
   const lot = lotQuery.data ?? null;
 
-  const createPassportMutation = useMutation({
-    mutationFn: (lotArg: Lot) => createPassportForLot(lotArg),
+  // Pass the Lot as a variable into the mutation instead of
+  // closing over it. This avoids any "undefined.id" surprises.
+  const createPassportMutation = useMutation<
+    PassportCreateResponse,
+    Error,
+    Lot
+  >({
+    mutationFn: (currentLot) => createPassportForLot(currentLot),
     onSuccess: (data) => {
       setLocalPassport(data);
       setActionMsg("Passport created and linked for the demo.");
@@ -227,11 +233,7 @@ export function LotDetails() {
             }}
             title="Creates a passport using the hackathon Netlify Function."
           >
-            {createPassportMutation.isPending
-              ? "Generating…"
-              : effectivePassportId
-              ? "Regenerate (MVP)"
-              : "Generate passport"}
+            {createPassportMutation.isPending ? "Generating…" : "Generate passport"}
           </button>
         </div>
       </header>
@@ -389,10 +391,11 @@ export function LotDetails() {
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={!lotId || createPassportMutation.isPending}
+                disabled={!lot || createPassportMutation.isPending}
                 onClick={() => {
+                  if (!lot) return;
                   setActionMsg(null);
-                  createPassportMutation.mutate();
+                  createPassportMutation.mutate(lot);
                 }}
               >
                 {effectivePassportId ? "Regenerate (MVP)" : "Generate passport"}
