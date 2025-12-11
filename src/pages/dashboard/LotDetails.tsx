@@ -128,12 +128,6 @@ async function fetchLotById(lotId: string): Promise<Lot | null> {
   return (await res.json()) as Lot;
 }
 
-/**
- * IMPORTANT:
- * This body structure matches what the Netlify `passport-create`
- * function validates: it wants `cooperativeId` and a nested
- * `product` object with `name`, etc.
- */
 async function createPassportForLot(lot: Lot): Promise<PassportCreateResponse> {
   const res = await fetch("/.netlify/functions/passport-create", {
     method: "POST",
@@ -180,8 +174,6 @@ export function LotDetails() {
 
   const lot = lotQuery.data ?? null;
 
-  // Pass the Lot as a variable into the mutation instead of
-  // closing over it. This avoids any "undefined.id" surprises.
   const createPassportMutation = useMutation<
     PassportCreateResponse,
     Error,
@@ -190,7 +182,7 @@ export function LotDetails() {
     mutationFn: (currentLot) => createPassportForLot(currentLot),
     onSuccess: (data) => {
       setLocalPassport(data);
-      setActionMsg("Passport created and linked for the demo.");
+      setActionMsg("Passport created successfully and saved to the database.");
     },
     onError: (err) => {
       const msg =
@@ -344,24 +336,16 @@ export function LotDetails() {
           <div className="card card--soft">
             <div className="aside-label">Passport status</div>
 
-            {!effectivePassportId && !localPassport && (
+            {!effectivePassportId && (
               <>
                 <div className="passport-state">
                   <div className="passport-state__title">Not created yet</div>
                   <div className="muted">
-                    Generate a Digital Product Passport to produce a buyer-friendly traceability summary with a QR payload.
+                    Generate a Digital Product Passport to produce a buyer-friendly
+                    traceability summary with a QR payload.
                   </div>
                 </div>
               </>
-            )}
-
-            {!effectivePassportId && localPassport && (
-              <div className="passport-state">
-                <div className="passport-state__title">Passport created (not persisted)</div>
-                <div className="muted">
-                  This passport exists for the demo, but will not appear in the Lots dashboard (mock data).
-                </div>
-              </div>
             )}
 
             {effectivePassportId && (

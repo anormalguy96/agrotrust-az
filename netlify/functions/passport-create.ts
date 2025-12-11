@@ -1,176 +1,153 @@
-// agrotrust-az/netlify/functions/passport-create.ts
-// Hackathon-friendly mock Digital Product Passport creation.
-// Generates a passport object and QR payload for a product lot.
+// netlify/functions/passport-create.ts
+import type { Handler } from "@netlify/functions";
+import crypto from "node:crypto";
+import { supabaseAdmin } from "./supabaseClient";
 
-import { randomUUID } from "node:crypto";
-
-type PassportCreateRequest = {
-  cooperativeId: string;
-  lotId?: string;
-
-  product: {
-    name: string;           // e.g., "Tomatoes", "Hazelnuts"
-    variety?: string;       // optional
-    quantity?: number;      // optional
-    unit?: string;          // e.g., "kg", "ton"
-  };
-
-  harvest: {
-    harvestDate: string;    // ISO or YYYY-MM-DD
-    region?: string;        // e.g., "Masalli", "Ganja"
-    farmName?: string;
-  };
-
-  inputs?: {
-    fertilisers?: string[];
-    pesticides?: string[];
-    irrigationType?: string;
-  };
-
-  media?: {
-    photos?: string[];      // URLs or base64 placeholders for MVP
-  };
-
-  certifications?: {
-    claimed?: string[];     // e.g., ["GlobalG.A.P", "Organic"]
-  };
+type ProductPayload = {
+  name: string;
+  variety?: string;
+  quantity?: number;
+  unit?: string;
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS"
+type HarvestPayload = {
+  region?: string;
+  harvestDate?: string;
 };
 
-function jsonResponse(statusCode: number, data: unknown) {
+type RequestBody = {
+  lotId: string;
+  cooperativeId?: string;
+  product?: ProductPayload;
+  harvest?: HarvestPayload;
+  certifications?: string[];
+};
+
+function badRequest(message: string, field?: string) {
   return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders
-    },
-    body: JSON.stringify(data)
+    statusCode: 400,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      error: "VALIDATION_ERROR",
+      field,
+      message,
+    }),
   };
 }
 
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === "string" && v.trim().length > 0;
-}
-
-export const handler = async (event: { httpMethod?: string; body?: string }) => {
-  const method = event.httpMethod?.toUpperCase();
-
-  if (method === "OPTIONS") {
-    return { statusCode: 204, headers: corsHeaders, body: "" };
-  }
-
-  if (method !== "POST") {
-    return jsonResponse(405, {
-      error: "METHOD_NOT_ALLOWED",
-      message: "Use POST to create a passport."
-    });
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return {
+      statusCode: 405,
+      headers: { "Allow": "POST" },
+      body: "Method Not Allowed",
+    };
   }
 
   if (!event.body) {
-    return jsonResponse(400, {
-      error: "BAD_REQUEST",
-      message: "Missing request body."
-    });
+    return badRequest("Request body is required.");
   }
 
-  let payload: PassportCreateRequest;
-
+  let payload: RequestBody;
   try {
     payload = JSON.parse(event.body);
   } catch {
-    return jsonResponse(400, {
-      error: "BAD_REQUEST",
-      message: "Invalid JSON body."
-    });
+    return badRequest("Invalid JSON body.");
   }
 
-  if (!isNonEmptyString(payload.cooperativeId)) {
-    return jsonResponse(400, {
-      error: "VALIDATION_ERROR",
-      field: "cooperativeId",
-      message: "cooperativeId is required."
-    });
+  const {
+    lotId,
+    cooperativeId,
+    product,
+    harvest,
+    certifications = [],
+  } = payload;
+
+  if (!lotId || typeof lotId !== "string") {
+    return badRequest("lotId is required.", "lotId");
   }
 
-  if (!payload.product || !isNonEmptyString(payload.product.name)) {
-    return jsonResponse(400, {
-      error: "VALIDATION_ERROR",
-      field: "product.name",
-      message: "product.name is required."
-    });
+  if (!product || typeof product !== "object") {
+    return badRequest("product is required.", "product");
   }
 
-  if (!payload.harvest || !isNonEmptyString(payload.harvest.harvestDate)) {
-    return jsonResponse(400, {
-      error: "VALIDATION_ERROR",
-      field: "harvest.harvestDate",
-      message: "harvest.harvestDate is required."
-    });
+  if (!product.name || !product.name.trim()) {
+    return badRequest("product.name is required.", "product.name");
   }
 
-  const passportId = randomUUID();
-  const lotId = isNonEmptyString(payload.lotId) ? payload.lotId.trim() : randomUUID();
-  const createdAt = new Date().toISOString();
+  // Normalise data
+  const coopId = cooperativeId || null;
+  const quantity =
+    typeof product.quantity === "number" ? product.quantity : null;
+  const unit = product.unit || "kg";
 
-  // QR payload for the MVP.
-  // In production, you'd likely point this to a public verification page on your domain.
-  const qrPayload = JSON.stringify({
-    scheme: "agrotrust-passport",
+  const region = harvest?.region ?? null;
+  const harvestDate = harvest?.harvestDate ?? null;
+
+  const certs = Array.isArray(certifications)
+    ? certifications.filter((c) => typeof c === "string")
+    : [];
+
+  // Generate a stable passport ID + QR payload
+  const passportId = crypto.randomUUID();
+
+  const qrPayloadObject = {
     passportId,
     lotId,
-    cooperativeId: payload.cooperativeId.trim()
-  });
-
-  const passport = {
-    passportId,
-    lotId,
-    cooperativeId: payload.cooperativeId.trim(),
+    cooperativeId: coopId,
     product: {
-      name: payload.product.name.trim(),
-      variety: isNonEmptyString(payload.product.variety) ? payload.product.variety.trim() : null,
-      quantity:
-        typeof payload.product.quantity === "number" && payload.product.quantity > 0
-          ? payload.product.quantity
-          : null,
-      unit: isNonEmptyString(payload.product.unit) ? payload.product.unit.trim() : null
+      name: product.name,
+      variety: product.variety ?? null,
+      quantity,
+      unit,
     },
     harvest: {
-      harvestDate: payload.harvest.harvestDate,
-      region: isNonEmptyString(payload.harvest.region) ? payload.harvest.region.trim() : "Azerbaijan",
-      farmName: isNonEmptyString(payload.harvest.farmName) ? payload.harvest.farmName.trim() : null
+      region,
+      harvestDate,
     },
-    inputs: {
-      fertilisers: payload.inputs?.fertilisers ?? [],
-      pesticides: payload.inputs?.pesticides ?? [],
-      irrigationType: isNonEmptyString(payload.inputs?.irrigationType)
-        ? payload.inputs?.irrigationType!.trim()
-        : null
-    },
-    media: {
-      photos: payload.media?.photos ?? []
-    },
-    certifications: {
-      claimed: payload.certifications?.claimed ?? [],
-      verified: [] as string[]
-    },
-    integrity: {
-      ledger: "mock",
-      signature: "demo-only"
-    },
-    qr: {
-      payload: qrPayload
-    },
-    createdAt,
-    demo: true
+    certifications: certs,
   };
 
-  return jsonResponse(200, {
-    ok: true,
-    passport
+  const qrPayload = JSON.stringify(qrPayloadObject);
+
+  // Persist to Supabase
+  const { error } = await supabaseAdmin.from("passports").insert({
+    id: passportId,
+    lot_id: lotId,
+    cooperative_id: coopId,
+    product_name: product.name,
+    product_variety: product.variety ?? null,
+    quantity_kg: quantity,
+    unit,
+    region,
+    harvest_date: harvestDate,
+    certifications: certs,
+    qr_payload: qrPayload,
   });
+
+  if (error) {
+    console.error("Supabase insert error (passports):", error);
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        error: "DB_ERROR",
+        message: error.message,
+      }),
+    };
+  }
+
+  const responseBody = {
+    passportId,
+    lotId,
+    qrPayload,
+    createdAt: new Date().toISOString(),
+    status: "created" as const,
+  };
+
+  return {
+    statusCode: 200,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(responseBody),
+  };
 };
