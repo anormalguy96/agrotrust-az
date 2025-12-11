@@ -161,13 +161,21 @@ export function LotDetails() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const lotQuery = useQuery({
-    queryKey: ["lot", lotId, env.enableMocks ? "mock" : "api"],
-    queryFn: () => fetchLotById(lotId),
-    enabled: Boolean(lotId)
-  });
+  queryKey: ["lot", lotId, env.enableMocks ? "mock" : "api"],
+  queryFn: () => fetchLotById(lotId),
+  enabled: Boolean(lotId),
+});
+
+  // lot is derived from the query
+  const lot = lotQuery.data ?? null;
 
   const createPassportMutation = useMutation({
-    mutationFn: () => createPassportForLot(lotId),
+    mutationFn: () => {
+      if (!lot) {
+        throw new Error("Lot is not loaded yet.");
+      }
+      return createPassportForLot(lot);   // ✅ pass the actual Lot
+    },
     onSuccess: (data) => {
       setLocalPassport(data);
       setActionMsg("Passport created and linked for the demo.");
@@ -179,7 +187,6 @@ export function LotDetails() {
     }
   });
 
-  const lot = lotQuery.data ?? null;
 
   const effectivePassportId = useMemo(() => {
     return localPassport?.passportId || lot?.passportId || null;
@@ -207,15 +214,15 @@ export function LotDetails() {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!lotId || createPassportMutation.isPending}
+            disabled={!lot || createPassportMutation.isPending}
             onClick={() => {
               setActionMsg(null);
               createPassportMutation.mutate();
             }}
-            title="Creates a passport using the hackathon Netlify Function."
           >
             {createPassportMutation.isPending ? "Generating…" : "Generate passport"}
           </button>
+
         </div>
       </header>
 
