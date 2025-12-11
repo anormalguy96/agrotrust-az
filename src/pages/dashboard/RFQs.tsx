@@ -34,6 +34,31 @@ type Lot = {
   status?: "draft" | "ready" | "exported";
 };
 
+type RawLot = {
+  id: string;
+  coopId?: string;
+  product?: {
+    name?: string;
+    variety?: string;
+    quantity?: number;
+    unit?: string;
+  };
+  harvest?: {
+    harvestDate?: string;
+    region?: string;
+    district?: string;
+    farmName?: string;
+  };
+  certifications?: {
+    claimed?: string[];
+    verified?: string[];
+  };
+  exportReadiness?: {
+    status?: string;
+    targetMarkets?: string[];
+  };
+};
+
 type Buyer = {
   id: string;
   name: string;
@@ -45,6 +70,46 @@ type Buyer = {
   minOrderKg?: number;
   riskProfile?: "low" | "medium" | "high";
 };
+
+function mapRawLot(raw: RawLot): Lot {
+  const productName = raw.product?.name?.trim() || "Unnamed product";
+  const variety = raw.product?.variety?.trim() || undefined;
+  const quantity =
+    typeof raw.product?.quantity === "number" ? raw.product.quantity : undefined;
+  const unit = raw.product?.unit;
+
+  const certifications: string[] = [
+    ...(raw.certifications?.claimed ?? []),
+    ...(raw.certifications?.verified ?? []),
+  ];
+
+  let status: Lot["status"] = "draft";
+  switch (raw.exportReadiness?.status) {
+    case "READY_FOR_BUYER_REVIEW":
+      status = "ready";
+      break;
+    case "CERT_EVIDENCE_PENDING":
+      status = "draft";
+      break;
+    default:
+      status = "draft";
+  }
+
+  return {
+    id: raw.id,
+    product: productName,
+    variety,
+    coopId: raw.coopId,
+    coopName: raw.harvest?.farmName,
+    region: raw.harvest?.region,
+    harvestDate: raw.harvest?.harvestDate,
+    quantityKg: unit === "kg" ? quantity : undefined,
+    qualityGrade: undefined,
+    certifications,
+    passportId: null,
+    status,
+  };
+}
 
 type RFQStatus = "draft" | "sent" | "answered" | "closed";
 
@@ -76,8 +141,14 @@ async function fetchSampleLots(): Promise<Lot[]> {
     headers: { "Content-Type": "application/json" }
   });
   if (!res.ok) throw new Error("Failed to load sample lots.");
+
   const data = (await res.json()) as unknown;
-  return Array.isArray(data) ? (data as Lot[]) : [];
+
+  if (!Array.isArray(data)) return [];
+
+  return (data as RawLot[])
+    .filter((item) => item && typeof item.id === "string")
+    .map(mapRawLot);
 }
 
 async function fetchSampleBuyers(): Promise<Buyer[]> {
