@@ -81,7 +81,14 @@ export const router = createBrowserRouter([
       { path: "rfqs", element: <RFQs /> },
       { path: "contracts", element: <Contracts /> },
       { path: "settings", element: <Settings /> },
-
+      {
+        path: ROUTES.DASHBOARD.ADMIN_USERS,
+        element: (
+          <AdminOnlyRoute>
+            <AdminUsers />
+          </AdminOnlyRoute>
+        )
+      },
       { path: "*", element: <NotFound /> }
     ]
   },
