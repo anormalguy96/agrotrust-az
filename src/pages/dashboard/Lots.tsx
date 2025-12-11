@@ -1,5 +1,3 @@
-// agrotrust-az/src/pages/dashboard/Lots.tsx
-
 import { useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -7,16 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { env } from "@/app/config/env";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
-
-/**
- * Lots (Dashboard)
- *
- * Hackathon MVP implementation:
- * - Loads sample lots from /public/mock/sample-lots.json
- * - Uses React Query for clean async state
- * - Provides light filtering/search
- * - Keeps types local to avoid coupling before features/* is finalised
- */
 
 type Lot = {
   id: string;
@@ -33,9 +21,75 @@ type Lot = {
   status?: "draft" | "ready" | "exported";
 };
 
+// Raw shape coming from public/mock/sample-lots.json
+type RawLot = {
+  id: string;
+  coopId?: string;
+  product?: {
+    name?: string;
+    variety?: string;
+    quantity?: number;
+    unit?: string;
+  };
+  harvest?: {
+    harvestDate?: string;
+    region?: string;
+    district?: string;
+    farmName?: string;
+  };
+  certifications?: {
+    claimed?: string[];
+    verified?: string[];
+  };
+  exportReadiness?: {
+    status?: string;
+    targetMarkets?: string[];
+  };
+};
+
+function mapRawLot(raw: RawLot): Lot {
+  const productName = raw.product?.name?.trim() || "Unnamed product";
+  const variety = raw.product?.variety?.trim() || undefined;
+  const quantity =
+    typeof raw.product?.quantity === "number" ? raw.product.quantity : undefined;
+  const unit = raw.product?.unit;
+
+  const certifications: string[] = [
+    ...(raw.certifications?.claimed ?? []),
+    ...(raw.certifications?.verified ?? []),
+  ];
+
+  let status: Lot["status"] = "draft";
+  switch (raw.exportReadiness?.status) {
+    case "READY_FOR_BUYER_REVIEW":
+      status = "ready";
+      break;
+    case "CERT_EVIDENCE_PENDING":
+      status = "draft";
+      break;
+    default:
+      status = "draft";
+  }
+
+  return {
+    id: raw.id,
+    product: productName,
+    variety,
+    coopId: raw.coopId,
+    coopName: raw.harvest?.farmName,
+    region: raw.harvest?.region,
+    harvestDate: raw.harvest?.harvestDate,
+    quantityKg: unit === "kg" ? quantity : undefined,
+    qualityGrade: undefined,
+    certifications,
+    passportId: null,
+    status,
+  };
+}
+
 async function fetchSampleLots(): Promise<Lot[]> {
   const res = await fetch("/mock/sample-lots.json", {
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json" },
   });
 
   if (!res.ok) {
@@ -46,8 +100,9 @@ async function fetchSampleLots(): Promise<Lot[]> {
 
   if (!Array.isArray(data)) return [];
 
-  // soft-validate shape for MVP
-  return data.filter(Boolean) as Lot[];
+  return (data as RawLot[])
+    .filter((item) => item && typeof item.id === "string")
+    .map(mapRawLot);
 }
 
 export function Lots() {
@@ -128,9 +183,7 @@ export function Lots() {
                 : "Buyers cannot create lots."
             }
             onClick={() => {
-              // Hackathon placeholder: we keep creation out of scope
-              // without breaking the UX.
-              // eslint-disable-next-line no-alert
+              
               alert("Lot creation UI is planned for the next iteration.");
             }}
           >
