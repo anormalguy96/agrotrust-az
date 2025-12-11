@@ -1,5 +1,3 @@
-// agrotrust-az/src/pages/dashboard/LotDetails.tsx
-
 import { useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -7,17 +5,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { env } from "@/app/config/env";
 import { ROUTES } from "@/app/config/routes";
 
-/**
- * LotDetails (Dashboard)
- *
- * Hackathon MVP:
- * - Reads lotId from route
- * - Loads lot data from mock JSON when env.enableMocks is true
- * - Provides a "Generate Passport" action that calls Netlify Function
- *
- * This page intentionally avoids deep coupling with /features
- * until those modules are implemented.
- */
 
 type Lot = {
   id: string;
@@ -44,13 +31,87 @@ type PassportCreateResponse = {
   status?: "created" | "linked";
 };
 
+// Same raw shape as sample-lots.json
+type RawLot = {
+  id: string;
+  coopId?: string;
+  product?: {
+    name?: string;
+    variety?: string;
+    quantity?: number;
+    unit?: string;
+  };
+  harvest?: {
+    harvestDate?: string;
+    region?: string;
+    district?: string;
+    farmName?: string;
+  };
+  certifications?: {
+    claimed?: string[];
+    verified?: string[];
+  };
+  exportReadiness?: {
+    status?: string;
+    targetMarkets?: string[];
+  };
+};
+
+function mapRawLot(raw: RawLot): Lot {
+  const productName = raw.product?.name?.trim() || "Unnamed product";
+  const variety = raw.product?.variety?.trim() || undefined;
+  const quantity =
+    typeof raw.product?.quantity === "number" ? raw.product.quantity : undefined;
+  const unit = raw.product?.unit;
+
+  const certifications: string[] = [
+    ...(raw.certifications?.claimed ?? []),
+    ...(raw.certifications?.verified ?? []),
+  ];
+
+  let status: Lot["status"] = "draft";
+  switch (raw.exportReadiness?.status) {
+    case "READY_FOR_BUYER_REVIEW":
+      status = "ready";
+      break;
+    case "CERT_EVIDENCE_PENDING":
+      status = "draft";
+      break;
+    default:
+      status = "draft";
+  }
+
+  return {
+    id: raw.id,
+    product: productName,
+    variety,
+    coopId: raw.coopId,
+    coopName: raw.harvest?.farmName,
+    region: raw.harvest?.region,
+    harvestDate: raw.harvest?.harvestDate,
+    quantityKg: unit === "kg" ? quantity : undefined,
+    qualityGrade: undefined,
+    certifications,
+    passportId: null,
+    status,
+    notes: undefined,
+    photos: [],
+  };
+}
+
 async function fetchSampleLots(): Promise<Lot[]> {
   const res = await fetch("/mock/sample-lots.json", {
-    headers: { "Content-Type": "application/json" }
+    headers: { "Content-Type": "application/json" },
   });
+
   if (!res.ok) throw new Error("Failed to load sample lots.");
+
   const data = (await res.json()) as unknown;
-  return Array.isArray(data) ? (data as Lot[]) : [];
+  if (!Array.isArray(data)) return [];
+
+  return (data as RawLot[])
+    .filter((item) => item && typeof item.id === "string")
+    .map(mapRawLot);
 }
 
 async function fetchLotById(lotId: string): Promise<Lot | null> {
