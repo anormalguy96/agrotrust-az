@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, Route } from "react-router-dom";
 import { AdminUserList } from "@/pages/admin/AdminUserList";
 import { AdminOnlyRoute } from "@/components/AdminOnlyRoute";
 import { AdminUsers } from "@/pages/dashboard/AdminUsers";
@@ -27,6 +27,10 @@ import { Contracts } from "@/pages/dashboard/Contracts";
 import { Settings } from "@/pages/dashboard/Settings";
 import { NotFound } from "@/pages/errors/NotFound";
 import { Forbidden } from "@/pages/errors/Forbidden";
+import { LotCreate } from "@/pages/dashboard/LotCreate";
+
+<Route path={ROUTES.DASHBOARD.LOT_CREATE} element={<LotCreate />} />
+
 
 export const router = createBrowserRouter([
   {

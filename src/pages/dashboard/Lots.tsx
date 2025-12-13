@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-
+import { useNavigate } from "react-router-dom";
 import { env } from "@/app/config/env";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
+
+const navigate = useNavigate();
 
 type Lot = {
   id: string;
@@ -178,18 +180,9 @@ export function Lots() {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!canCreateLots}
-            title={
-              canCreateLots
-                ? "Lot creation will be added in the next MVP iteration."
-                : "Buyers cannot create lots."
-            }
-            onClick={() => {
-              
-              alert("Lot creation UI is planned for the next iteration.");
-            }}
+            onClick={() => navigate(ROUTES.DASHBOARD.LOT_CREATE)}
           >
-            Create lot (MVP)
+            Create a lot
           </button>
         </div>
       </header>

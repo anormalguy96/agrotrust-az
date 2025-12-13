@@ -16,6 +16,8 @@ export type AuthUser = {
   name: string;
   email: string;
   role: UserRole;
+  cooperativeId?: string;
+  coopId?: string;
 };
 
 type SignInInput = {
@@ -104,7 +106,7 @@ export function AuthProvider({ children }: Props) {
           ? "Platform Admin"
           : "Cooperative Member");
 
-      const newUser: AuthUser = { id, name, email, role };
+      const newUser: AuthUser = { id, name, email, role, cooperativeId: id };
 
       setUser(newUser);
       persist(newUser);

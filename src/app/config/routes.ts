@@ -1,10 +1,3 @@
-// agrotrust-az/src/app/config/routes.ts
-
-/**
- * Route path constants and small helpers.
- * These should match your router setup and page file structure.
- */
-
 export const ROUTES = {
   // Marketing
   HOME: "/",
@@ -32,9 +25,12 @@ export const ROUTES = {
     RFQS: "/dashboard/rfqs",
     CONTRACTS: "/dashboard/contracts",
     SETTINGS: "/dashboard/settings",
-    ADMIN_USERS: "/dashboard/admin/users"
+    ADMIN_USERS: "/dashboard/admin/users",
+    ADMIN_ANALYTICS: "/dashboard/admin/analytics",
+    LOT_CREATE:"/dashboard/lots/new"
   }
 } as const;
+
 
 export function lotDetailsPath(lotId: string) {
   return `/dashboard/lots/${encodeURIComponent(lotId)}`;

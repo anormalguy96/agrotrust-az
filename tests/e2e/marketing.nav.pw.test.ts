@@ -2,20 +2,6 @@
 
 import { test, expect } from "@playwright/test";
 
-/**
- * AgroTrust AZ - Marketing navigation tests (Playwright)
- *
- * Goal:
- * - Confirm top-level marketing navigation works.
- * - Keep checks resilient to small UI text changes.
- *
- * Strategy:
- * - Start on Home.
- * - Try to click Navbar links if they exist.
- * - Fallback to direct navigation if a link label changes
- *   during hackathon iteration.
- */
-
 const PAGES: Array<{
   name: RegExp;
   path: string;

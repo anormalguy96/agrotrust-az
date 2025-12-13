@@ -2,19 +2,6 @@
 
 import { test, expect, type Page } from "@playwright/test";
 
-/**
- * AgroTrust AZ - Buyers smoke tests (Playwright)
- *
- * Goal:
- * - Confirm buyer-related dashboard surfaces render with mock auth.
- * - Keep assertions resilient for hackathon iteration.
- *
- * Assumptions:
- * - /dashboard/buyers exists.
- * - Buyers may be displayed as a table, grid, or cards.
- *
- * If your AuthProvider uses different localStorage keys, update constants.
- */
 
 const AUTH_TOKEN_KEY = "agrotrust:auth:token";
 const AUTH_USER_KEY = "agrotrust:auth:user";
