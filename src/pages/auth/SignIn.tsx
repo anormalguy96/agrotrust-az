@@ -1,5 +1,5 @@
-import { FormEvent, useState } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { FormEvent, useMemo, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -16,6 +16,7 @@ type LoginResponse = {
 
 function safeJsonParse<T>(text: string): T | null {
   try {
+    if (!text) return null;
     return JSON.parse(text) as T;
   } catch {
     return null;
@@ -25,70 +26,60 @@ function safeJsonParse<T>(text: string): T | null {
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const auth = useAuth() as any; // keeps this resilient if your hook shape changes
-  const setUser: ((u: any) => void) | undefined = auth?.setUser;
+  const auth = useAuth() as any; // keep flexible while your auth hook evolves
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const from =
-    (location.state as any)?.from?.pathname || ROUTES.DASHBOARD.OVERVIEW;
+  const from = useMemo(() => {
+    return (location.state as any)?.from?.pathname || ROUTES.DASHBOARD.OVERVIEW;
+  }, [location.state]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
-
     try {
       const res = await fetch("/.netlify/functions/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password
-        }),
-        signal: controller.signal
+        // keep cookies if your backend sets any
+        credentials: "same-origin",
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
-      const raw = await res.text().catch(() => "");
-      const data = raw ? safeJsonParse<LoginResponse>(raw) : null;
+      const text = await res.text().catch(() => "");
+      const data = safeJsonParse<LoginResponse>(text) ?? {};
 
-      if (!res.ok) {
-        // Show the server’s real message (JSON error or plain text), not a generic one.
+      // Prefer backend-provided message, otherwise show raw text, otherwise generic
+      if (!res.ok || data.error || !data.user) {
         const msg =
-          data?.error ||
-          raw ||
-          `Login failed (HTTP ${res.status}). Check your Netlify function logs.`;
+          data.error ||
+          (text && text.length < 300 ? text : "") ||
+          `Login failed (${res.status}).`;
         setError(msg);
         return;
       }
 
-      if (!data?.user) {
-        setError(data?.error || "Login succeeded but no user was returned.");
-        return;
-      }
-
-      if (typeof setUser === "function") {
-        setUser(data.user);
+      // IMPORTANT: don’t crash if auth doesn’t expose setUser yet
+      if (typeof auth?.setUser === "function") {
+        auth.setUser(data.user);
+      } else if (typeof auth?.signIn === "function") {
+        auth.signIn(data.user);
       } else {
-        // last-resort so you at least don’t crash if setUser is missing
-        localStorage.setItem("agrotrust_user", JSON.stringify(data.user));
+        // This is the “r is not a function” class of bug.
+        throw new Error("Auth provider is missing setUser/signIn.");
       }
 
       navigate(from, { replace: true });
-    } catch (err: any) {
-      if (err?.name === "AbortError") {
-        setError("Login request timed out. Please try again.");
-      } else {
-        setError("Login failed. Please try again.");
-      }
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
     } finally {
-      window.clearTimeout(timeoutId);
       setSubmitting(false);
     }
   }
@@ -99,11 +90,10 @@ export function SignIn() {
         <div className="card" style={{ maxWidth: 520, margin: "0 auto" }}>
           <h1 className="dash-title">Sign in to AgroTrust AZ</h1>
           <p className="muted" style={{ marginBottom: "1.5rem" }}>
-            Use your registered email and password. Admins can access extra controls
-            in the dashboard.
+            Use your registered email and password.
           </p>
 
-          <form onSubmit={handleSubmit} className="stack stack--md">
+          <form onSubmit={handleSubmit} className="stack stack--md" noValidate>
             <label className="form-label">
               Email
               <input
@@ -138,14 +128,7 @@ export function SignIn() {
 
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "0.75rem" }}>
               <button type="submit" className="btn btn--primary" disabled={submitting}>
-                {submitting ? (
-                  <>
-                    <span className="spin" aria-hidden="true" />
-                    Signing in…
-                  </>
-                ) : (
-                  "Sign in"
-                )}
+                {submitting ? "Signing in…" : "Sign in"}
               </button>
 
               <NavLink to={ROUTES.AUTH.SIGN_UP} className="btn btn--ghost">
@@ -155,28 +138,10 @@ export function SignIn() {
           </form>
 
           <p className="muted" style={{ marginTop: "1.25rem", fontSize: "0.8rem" }}>
-            For admin access, use <strong>agrotrust.az@gmail.com</strong> with your
-            configured admin password.
+            Admin email: <strong>agrotrust.az@gmail.com</strong>
           </p>
         </div>
       </div>
-
-      <style>{`
-        .btn.btn--primary{
-          display:inline-flex;
-          align-items:center;
-          gap: 10px;
-        }
-        .spin{
-          width: 14px;
-          height: 14px;
-          border: 2px solid currentColor;
-          border-right-color: transparent;
-          border-radius: 999px;
-          animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
     </main>
   );
 }
