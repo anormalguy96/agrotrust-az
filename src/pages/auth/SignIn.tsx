@@ -1,105 +1,94 @@
-import { FormEvent, useMemo, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { FormEvent, useState } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 
-type LoginResponse =
-  | {
-      user: {
-        id: string;
-        email: string;
-        role: "cooperative" | "buyer" | "admin";
-        firstName?: string;
-        lastName?: string;
-      };
-    }
-  | {
-      error?: string;
-      message?: string;
-    };
+type LoginResponse = {
+  user?: {
+    id: string;
+    email: string;
+    role: "cooperative" | "buyer" | "admin";
+    firstName?: string;
+    lastName?: string;
+  };
+  error?: string;
+};
 
-async function readErrorMessage(res: Response): Promise<string> {
-  const ct = res.headers.get("content-type") || "";
-
-  if (ct.includes("application/json")) {
-    const data = (await res.json().catch(() => null)) as any;
-    const msg =
-      data?.error ||
-      data?.message ||
-      (typeof data === "string" ? data : null) ||
-      null;
-
-    return (
-      msg ||
-      `Request failed (${res.status}${res.statusText ? ` ${res.statusText}` : ""}).`
-    );
+function safeJsonParse<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
   }
-
-  const text = (await res.text().catch(() => "")).trim();
-  return (
-    text ||
-    `Request failed (${res.status}${res.statusText ? ` ${res.statusText}` : ""}).`
-  );
 }
 
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setUser } = useAuth();
+  const auth = useAuth() as any; // keeps this resilient if your hook shape changes
+  const setUser: ((u: any) => void) | undefined = auth?.setUser;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const from = useMemo(() => {
-    const state = location.state as any;
-    return state?.from?.pathname || ROUTES.DASHBOARD.OVERVIEW;
-  }, [location.state]);
+  const from =
+    (location.state as any)?.from?.pathname || ROUTES.DASHBOARD.OVERVIEW;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+
     try {
       const res = await fetch("/.netlify/functions/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password
-        })
+        }),
+        signal: controller.signal
       });
 
+      const raw = await res.text().catch(() => "");
+      const data = raw ? safeJsonParse<LoginResponse>(raw) : null;
+
       if (!res.ok) {
-        setError(await readErrorMessage(res));
+        // Show the server’s real message (JSON error or plain text), not a generic one.
+        const msg =
+          data?.error ||
+          raw ||
+          `Login failed (HTTP ${res.status}). Check your Netlify function logs.`;
+        setError(msg);
         return;
       }
 
-      const data = (await res.json().catch(() => null)) as LoginResponse | null;
-
-      if (!data || !("user" in data) || !data.user) {
-        setError("Login succeeded but server did not return user data.");
+      if (!data?.user) {
+        setError(data?.error || "Login succeeded but no user was returned.");
         return;
       }
 
-      const u = data.user;
-      const fullName = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
-
-      setUser({
-        id: u.id,
-        email: u.email,
-        role: u.role,
-        name: fullName || u.email
-      } as any);
+      if (typeof setUser === "function") {
+        setUser(data.user);
+      } else {
+        // last-resort so you at least don’t crash if setUser is missing
+        localStorage.setItem("agrotrust_user", JSON.stringify(data.user));
+      }
 
       navigate(from, { replace: true });
-    } catch (err) {
-      console.error(err);
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        setError("Login request timed out. Please try again.");
+      } else {
+        setError("Login failed. Please try again.");
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setSubmitting(false);
     }
   }
@@ -123,7 +112,6 @@ export function SignIn() {
                 required
                 autoComplete="email"
                 value={email}
-                disabled={submitting}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
               />
@@ -137,8 +125,7 @@ export function SignIn() {
                 required
                 autoComplete="current-password"
                 value={password}
-                disabled={submitting}
-                onChange={(e) => setPassword(e.target- value)}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
               />
             </label>
@@ -149,19 +136,18 @@ export function SignIn() {
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                alignItems: "center",
-                marginTop: "0.75rem"
-              }}
-            >
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "0.75rem" }}>
               <button type="submit" className="btn btn--primary" disabled={submitting}>
-                {submitting ? "Signing in…" : "Sign in"}
+                {submitting ? (
+                  <>
+                    <span className="spin" aria-hidden="true" />
+                    Signing in…
+                  </>
+                ) : (
+                  "Sign in"
+                )}
               </button>
 
-              {/* Important: this must only NAVIGATE, not submit anything */}
               <NavLink to={ROUTES.AUTH.SIGN_UP} className="btn btn--ghost">
                 Create account
               </NavLink>
@@ -174,6 +160,23 @@ export function SignIn() {
           </p>
         </div>
       </div>
+
+      <style>{`
+        .btn.btn--primary{
+          display:inline-flex;
+          align-items:center;
+          gap: 10px;
+        }
+        .spin{
+          width: 14px;
+          height: 14px;
+          border: 2px solid currentColor;
+          border-right-color: transparent;
+          border-radius: 999px;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </main>
   );
 }
