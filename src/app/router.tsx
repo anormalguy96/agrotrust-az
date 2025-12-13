@@ -88,6 +88,14 @@ export const router = createBrowserRouter([
           </AdminOnlyRoute>
         )
       },
+      {
+        path: ROUTES.DASHBOARD.ADMIN_USERLIST,
+        element: (
+          <AdminOnlyRoute>
+            <AdminUserList />
+          </AdminOnlyRoute>
+        )
+      },
       { path: "*", element: <NotFound /> }
     ]
   },

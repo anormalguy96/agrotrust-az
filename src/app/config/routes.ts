@@ -27,6 +27,7 @@ export const ROUTES = {
     SETTINGS: "/dashboard/settings",
     ADMIN_USERS: "/dashboard/admin/users",
     ADMIN_ANALYTICS: "/dashboard/admin/analytics",
+    ADMIN_USERLIST: "/dashboard/admin/AdminUserList",
     LOT_CREATE:"/dashboard/lots/new"
   }
 } as const;
