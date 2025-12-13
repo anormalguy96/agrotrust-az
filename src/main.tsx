@@ -21,9 +21,7 @@ ReactDOM.createRoot(rootElement).render(
       <ThemeProvider>
         <QueryProvider>
           <AuthProvider>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
+            <App />
           </AuthProvider>
         </QueryProvider>
       </ThemeProvider>
