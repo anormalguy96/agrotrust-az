@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-
+import { BrowserRouter } from "react-router-dom";
 import { App } from "@/app/App";
 import { AuthProvider } from "@/app/providers/AuthProvider";
 import { QueryProvider } from "@/app/providers/QueryProvider";
@@ -21,7 +21,9 @@ ReactDOM.createRoot(rootElement).render(
       <ThemeProvider>
         <QueryProvider>
           <AuthProvider>
-            <App />
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
           </AuthProvider>
         </QueryProvider>
       </ThemeProvider>
