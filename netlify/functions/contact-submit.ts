@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { mailer } from "./mailer";
 
-type Audience = "coop" | "buyer" | "other";
+type Audience = "cooperative" | "buyer" | "other";
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -35,7 +35,7 @@ export const handler: Handler = async (event) => {
     const audienceLabel =
       safeAudience === "buyer"
         ? "Buyer / Importer"
-        : safeAudience === "coop"
+        : safeAudience === "cooperative"
         ? "Farmer / Cooperative"
         : "Other stakeholder";
 

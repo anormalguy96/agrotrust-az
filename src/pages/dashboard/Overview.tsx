@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 export function Overview() {
   const { user, getRoleLabel } = useAuth();
 
-  const role = user?.role ?? "coop";
+  const role = user?.role ?? "cooperative";
   const roleLabel = getRoleLabel(role);
 
   const roleHeadline =

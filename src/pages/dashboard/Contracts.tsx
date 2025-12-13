@@ -8,23 +8,13 @@ import { env } from "@/app/config/env";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 
-/**
- * Contracts (Escrow Demo)
- *
- * Hackathon MVP goals:
- * - Demonstrate inspection-gated escrow logic in a believable, simple UI.
- * - Use mock lots/buyers to create a fast narrative.
- * - Persist demo contracts in localStorage.
- *
- * This page intentionally avoids deeper feature coupling until features/escrow
- * is fully implemented.
- */
 
 type Lot = {
   id: string;
   product: string;
   variety?: string;
   coopId?: string;
+  cooperativeId?: string;
   coopName?: string;
   region?: string;
   harvestDate?: string;
@@ -34,7 +24,6 @@ type Lot = {
   passportId?: string | null;
   status?: "draft" | "ready" | "exported";
 };
-
 type Buyer = {
   id: string;
   name: string;
@@ -60,6 +49,7 @@ type EscrowContract = {
   escrowId: string;
   createdAt: string;
   updatedAt?: string;
+  cooperativeId?: string;
 
   lotId: string;
   lotProduct?: string;
@@ -189,6 +179,7 @@ function statusToneClass(s: EscrowStatus) {
 async function escrowInit(payload: {
   lotId: string;
   buyerId: string;
+  cooperativeId: string;
   amountUsd: number;
 }): Promise<EscrowInitResponse> {
   const res = await fetch("/.netlify/functions/escrow-init", {
@@ -251,7 +242,7 @@ export function Contracts() {
   const [showCreate, setShowCreate] = useState(false);
 
   const canCreate =
-    user?.role === "buyer" || user?.role === "admin" || user?.role === "coop";
+    user?.role === "buyer" || user?.role === "admin" || user?.role === "cooperative"|| user?.role === "cooperative";
 
   useEffect(() => {
     // Merge seeds + stored, de-duplicate by escrowId
@@ -298,7 +289,7 @@ export function Contracts() {
     }
     return lots.map((l) => ({
       id: l.id,
-      label: `${l.id} • ${l.product} • ${l.coopName ?? "Coop"}`
+      label: `${l.id} • ${l.product} • ${l.coopName ?? "Cooperative"}`
     }));
   }, [lots]);
 
@@ -313,12 +304,31 @@ export function Contracts() {
   }, [buyers]);
 
   const initMutation = useMutation({
-    mutationFn: () =>
-      escrowInit({
-        lotId: selectedLotId,
-        buyerId: selectedBuyerId,
-        amountUsd: Number(amountUsd) || 0
-      }),
+    mutationFn: () => {
+    const lot = lots.find((l) => l.id === selectedLotId);
+
+    const cooperativeId =
+      lot?.cooperativeId ||
+      lot?.coopId ||
+      (user?.role === "cooperative" ? user.id : undefined);
+
+    if (!cooperativeId) {
+      throw new Error("Cannot initiate escrow: cooperativeId is missing. Select a real lot from DB.");
+    }
+
+    const buyerId = user?.role === "buyer" ? user.id : selectedBuyerId;
+
+    if (!buyerId) {
+      throw new Error("Cannot initiate escrow: buyerId is missing.");
+    }
+
+    return escrowInit({
+      lotId: selectedLotId,
+      buyerId,
+      cooperativeId,
+      amountUsd: Number(amountUsd) || 0
+    });
+  },
     onSuccess: (data) => {
       const lot = lots.find((l) => l.id === selectedLotId);
       const buyer = buyers.find((b) => b.id === selectedBuyerId);
@@ -356,7 +366,10 @@ export function Contracts() {
   });
 
   const releaseMutation = useMutation({
-    mutationFn: (payload: { escrowId: string; outcome: EscrowOutcome }) =>
+    mutationFn: (payload: {
+      escrowId: string;
+      outcome: EscrowOutcome
+    }) =>
       escrowRelease(payload),
     onSuccess: (data, vars) => {
       setContracts((prev) =>

@@ -4,14 +4,14 @@ import { NavLink } from "react-router-dom";
 import { BRAND } from "@/app/config/constants";
 import { ROUTES } from "@/app/config/routes";
 
-type Audience = "coop" | "buyer" | "other";
+type Audience = "cooperative" | "buyer" | "other";
 
 
 export function Contact() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
-  const [audience, setAudience] = useState<Audience>("coop");
+  const [audience, setAudience] = useState<Audience>("cooperative");
   const [message, setMessage] = useState("");
 
   const [status, setStatus] = useState<
@@ -63,7 +63,7 @@ export function Contact() {
       setName("");
       setCompany("");
       setEmail("");
-      setAudience("coop");
+      setAudience("cooperative");
       setMessage("");
     } catch (err) {
       console.error("Contact submit error:", err);
@@ -137,7 +137,7 @@ export function Contact() {
                   setAudience(e.target.value as Audience)
                 }
               >
-                <option value="coop">Farmer / Cooperative</option>
+                <option value="cooperative">Farmer / Cooperative</option>
                 <option value="buyer">Buyer / Importer</option>
                 <option value="other">Other stakeholder</option>
               </select>

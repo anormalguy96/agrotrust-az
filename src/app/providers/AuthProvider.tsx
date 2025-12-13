@@ -9,7 +9,7 @@ import {
   type ReactNode
 } from "react";
 
-export type UserRole = "coop" | "buyer" | "admin";
+export type UserRole = "cooperative" | "buyer" | "admin";
 
 export type AuthUser = {
   id: string;
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: Props) {
       // Simple deterministic ID for demo consistency
       const id = `user-${btoa(email).replace(/=+/g, "").slice(0, 12)}`;
 
-      const role: UserRole = input.role ?? "coop";
+      const role: UserRole = input.role ?? "cooperative";
       const name =
         input.name?.trim() ||
         (role === "buyer"
@@ -125,7 +125,7 @@ export function AuthProvider({ children }: Props) {
         return "Buyer";
       case "admin":
         return "Admin";
-      case "coop":
+      case "cooperative":
       default:
         return "Cooperative";
     }

@@ -55,7 +55,6 @@ export function SignIn() {
       const text = await res.text().catch(() => "");
       const data = safeJsonParse<LoginResponse>(text) ?? {};
 
-      // Prefer backend-provided message, otherwise show raw text, otherwise generic
       if (!res.ok || data.error || !data.user) {
         const msg =
           data.error ||
@@ -65,7 +64,6 @@ export function SignIn() {
         return;
       }
 
-      // IMPORTANT: don’t crash if auth doesn’t expose setUser yet
       if (typeof auth?.setUser === "function") {
         auth.setUser(data.user);
       } else if (typeof auth?.signIn === "function") {

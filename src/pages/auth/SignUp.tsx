@@ -10,7 +10,7 @@ export function SignUp() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth(); // we don't sign in here, only after OTP verify
 
-  const [role, setRole] = useState<UserRole>("coop");
+  const [role, setRole] = useState<UserRole>("cooperative");
   const [name, setName] = useState("");
   const [organisation, setOrganisation] = useState("");
   const [email, setEmail] = useState("");
@@ -118,7 +118,7 @@ export function SignUp() {
                 value={role}
                 onChange={(e) => setRole(e.target.value as UserRole)}
               >
-                <option value="coop">Cooperative / Farmer</option>
+                <option value="cooperative">Cooperative / Farmer</option>
                 <option value="buyer">Buyer / Importer</option>
                 {/* Admin must be seeded manually; we don't expose it here */}
               </select>

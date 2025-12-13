@@ -8,7 +8,7 @@ function generateOtp() {
 }
 
 // only these roles are allowed via public sign-up
-const SAFE_ROLES = ["coop", "buyer"] as const;
+const SAFE_ROLES = ["cooperative", "buyer"] as const;
 type SafeRole = (typeof SAFE_ROLES)[number];
 
 function normalizeRole(input: unknown): SafeRole {
@@ -16,7 +16,7 @@ function normalizeRole(input: unknown): SafeRole {
 
   // map a few possible labels to internal values
   if (r === "cooperative" || r === "farmer" || r === "cooperative / farmer") {
-    r = "coop";
+    r = "cooperative";
   }
   if (r === "buyer" || r === "importer" || r === "buyer / importer") {
     r = "buyer";
@@ -27,7 +27,7 @@ function normalizeRole(input: unknown): SafeRole {
   }
 
   // fallback – never "admin"
-  return "coop";
+  return "cooperative";
 }
 
 export const handler: Handler = async (event) => {

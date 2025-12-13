@@ -631,7 +631,7 @@ export function RFQs() {
                 <option value="">No linked lot</option>
                 {lotOptionsForProduct.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.id} • {l.coopName ?? "Coop"} • {l.region ?? "Region"}
+                    {l.id} • {l.coopName ?? "Cooperative"} • {l.region ?? "Region"}
                   </option>
                 ))}
               </select>

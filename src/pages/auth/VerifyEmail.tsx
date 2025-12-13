@@ -92,7 +92,7 @@ export function VerifyEmail() {
         effectiveEmail ||
         "AgroTrust user";
 
-      const role: UserRole = displayRole || "coop";
+      const role: UserRole = displayRole || "cooperative";
 
       await signIn({
         email: effectiveEmail,

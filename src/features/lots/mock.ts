@@ -206,7 +206,7 @@ const FALLBACK_LOTS: Lot[] = [
 export function normaliseLot(raw: any): Lot {
   const id = safeString(raw?.id) || makeId("LOT");
 
-  const coopId = safeString(raw?.owner?.coopId) || safeString(raw?.coopId) || makeId("COOP");
+  const coopId = safeString(raw?.owner?.coopId) || safeString(raw?.coopId) || makeId("COOPERATIVE");
   const coopName =
     safeString(raw?.owner?.coopName) ||
     safeString(raw?.coopName) ||
