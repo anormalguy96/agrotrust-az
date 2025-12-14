@@ -4,11 +4,9 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  build: { sourcemap: true },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "src")
-    },
-    dedupe: ["react", "react-dom"]
-  }
+    alias: { "@": path.resolve(__dirname, "src") },
+    dedupe: ["react", "react-dom"],
+  },
 });
