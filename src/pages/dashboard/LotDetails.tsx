@@ -124,9 +124,14 @@ async function fetchLotById(lotId: string): Promise<Lot | null> {
   }
 
   const res = await fetch(`/api/lots/${encodeURIComponent(lotId)}`);
-  if (res.status === 404) return null;
+  const ct = res.headers.get("content-type") || "";
+  const text = await res.text();
+
   if (!res.ok) throw new Error("Failed to load lot.");
-  return (await res.json()) as Lot;
+  if (!ct.includes("application/json")) throw new Error(`Expected JSON, got ${ct}: ${text.slice(0, 60)}`);
+
+  return JSON.parse(text) as Lot;
+
 }
 
 async function createPassportForLot(lot: Lot): Promise<PassportCreateResponse> {
