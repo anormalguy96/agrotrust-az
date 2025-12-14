@@ -18,8 +18,15 @@ function json(statusCode: number, obj: unknown) {
 export const handler: Handler = async (event) => {
   try {
     const id = event.queryStringParameters?.id?.trim();
-    if (!id) return json(400, { error: "Missing id query param", got: event.queryStringParameters });
 
+    if (!id) {
+      return json(400, {
+        error: "Missing id query param",
+        path: event.path,
+        rawQuery: event.rawQuery,
+        queryStringParameters: event.queryStringParameters,
+      });
+    }
 
     const { data, error } = await supabase
       .from("lots")
