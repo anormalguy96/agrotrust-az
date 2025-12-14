@@ -5,7 +5,7 @@ import { AdminUsers } from "@/pages/dashboard/AdminUsers";
 import { Analytics } from "@/pages/dashboard/Analytics";
 import { ROUTES } from "@/app/config/routes";
 import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
-import AuthCallback from "@/pages/auth/callback";
+import AuthCallback from "@/pages/auth/callback/index";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { Home } from "@/pages/marketing/Home";
