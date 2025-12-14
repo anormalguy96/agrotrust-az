@@ -40,9 +40,9 @@
   status = 200
   
 [[redirects]]
-  from = "/api/lots/:id"
-  to = "/.netlify/functions/lots-get?id=:id"
-  status = 200
+from = "/api/lots/*"
+to = "/.netlify/functions/lots-get?id=:splat"
+status = 200
 
 [[redirects]]
   from   = "/*"

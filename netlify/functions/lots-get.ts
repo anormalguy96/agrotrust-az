@@ -18,7 +18,8 @@ function json(statusCode: number, obj: unknown) {
 export const handler: Handler = async (event) => {
   try {
     const id = event.queryStringParameters?.id?.trim();
-    if (!id) return json(400, { error: "Missing id" });
+    if (!id) return json(400, { error: "Missing id query param", got: event.queryStringParameters });
+
 
     const { data, error } = await supabase
       .from("lots")
@@ -26,9 +27,7 @@ export const handler: Handler = async (event) => {
       .eq("id", id)
       .single();
 
-    if (error) {
-      return json(404, { error: "Lot not found" });
-    }
+    if (error) return json(400, { error: error.message });
 
     return json(200, {
       id: data.id,
