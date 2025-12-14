@@ -40,29 +40,24 @@ export function LotCreate() {
   const mutation = useMutation({
     mutationFn: () =>
       createLot({
-        cooperativeId: user?.cooperativeId ?? user?.coopId ?? user?.id, // adjust to your real user shape
-        product: {
-          name: productName,
-          variety: variety || undefined,
-          quantity: Number(quantityKg),
-          unit: "kg"
-        },
-        harvest: {
-          region: region || undefined,
-          harvestDate: harvestDate || undefined
-        },
+        cooperativeId: cooperativeId.trim(),
+        productName: productName.trim(),
+        variety: variety.trim() || undefined,
+        quantityKg: Number(quantityKg),
+        region: region.trim(),
+        harvestDate: harvestDate,
         certifications: certifications
           .split(",")
           .map((x) => x.trim())
-          .filter(Boolean)
+          .filter(Boolean),
       }),
     onSuccess: (data) => {
-      navigate(`/dashboard/lots/${data.lotId}`, { replace: true });
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : "Create lot failed.");
     }
   });
+
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
