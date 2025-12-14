@@ -6,7 +6,6 @@ import { env } from "@/app/config/env";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 
-const navigate = useNavigate();
 
 type Lot = {
   id: string;
@@ -112,6 +111,8 @@ async function fetchSampleLots(): Promise<Lot[]> {
 export function Lots() {
   const { user } = useAuth();
 
+  const navigate = useNavigate();
+  
   const [query, setQuery] = useState("");
   const [productFilter, setProductFilter] = useState("all");
 

@@ -4,7 +4,10 @@ import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
-  build: { sourcemap: true },
+  build: {
+    sourcemap: true,
+    minify: false
+  },
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
     dedupe: ["react", "react-dom"],
