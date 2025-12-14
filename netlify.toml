@@ -43,9 +43,9 @@
 from = "/api/lots/*"
 to = "/.netlify/functions/lots-get?id=:splat"
 status = 200
+force = true
 
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
   status = 200
-  force = true
