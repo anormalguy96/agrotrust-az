@@ -100,6 +100,21 @@ function mapRawLot(raw: RawLot): Lot {
   };
 }
 
+async function fetchSampleLots(): Promise<Lot[]> {
+  const res = await fetch("/mock/sample-lots.json", {
+    headers: { "Content-Type": "application/json" }
+  });
+
+  if (!res.ok) throw new Error("Failed to load sample lots.");
+
+  const data = (await res.json()) as unknown;
+  if (!Array.isArray(data)) return [];
+
+  return (data as RawLot[])
+    .filter((item) => item && typeof item.id === "string")
+    .map(mapRawLot);
+}
+
 async function fetchLotById(lotId: string): Promise<Lot | null> {
   if (!lotId) return null;
 
@@ -115,6 +130,7 @@ async function fetchLotById(lotId: string): Promise<Lot | null> {
   if (res.status === 404) return null;
 
   if (!res.ok) {
+    // show the actual API response (JSON error or text)
     throw new Error(text || `Failed to load lot (${res.status}).`);
   }
 
@@ -125,25 +141,6 @@ async function fetchLotById(lotId: string): Promise<Lot | null> {
   return JSON.parse(text) as Lot;
 }
 
-
-async function fetchLotById(lotId: string): Promise<Lot | null> {
-  if (!lotId) return null;
-
-  if (env.enableMocks) {
-    const lots = await fetchSampleLots();
-    return lots.find((l) => l.id === lotId) ?? null;
-  }
-
-  const res = await fetch(`/api/lots/${encodeURIComponent(lotId)}`);
-  const ct = res.headers.get("content-type") || "";
-  const text = await res.text();
-
-  if (!res.ok) throw new Error("Failed to load lot.");
-  if (!ct.includes("application/json")) throw new Error(`Expected JSON, got ${ct}: ${text.slice(0, 60)}`);
-
-  return JSON.parse(text) as Lot;
-
-}
 
 async function createPassportForLot(lot: Lot): Promise<PassportCreateResponse> {
   const res = await fetch("/.netlify/functions/passport-create", {
