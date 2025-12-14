@@ -10,40 +10,45 @@
 [dev]
   command    = "npm run dev"
   framework  = "vite"
-  targetPort = 5173   # where Vite dev server runs
-  port       = 8888   # Netlify dev URL
+  targetPort = 5173
+  port       = 8888
   autoLaunch = false
 
 [[redirects]]
   from   = "/api/passport/create"
   to     = "/.netlify/functions/passport-create"
   status = 200
+  force  = true
 
 [[redirects]]
   from   = "/api/passport/verify"
   to     = "/.netlify/functions/passport-verify"
   status = 200
+  force  = true
 
 [[redirects]]
   from   = "/api/escrow/init"
   to     = "/.netlify/functions/escrow-init"
   status = 200
+  force  = true
 
 [[redirects]]
   from   = "/api/escrow/release"
   to     = "/.netlify/functions/escrow-release"
   status = 200
+  force  = true
 
 [[redirects]]
   from   = "/api/health"
   to     = "/.netlify/functions/health"
   status = 200
-  
+  force  = true
+
 [[redirects]]
-from = "/api/lots/*"
-to = "/.netlify/functions/lots-get?id=:splat"
-status = 200
-force = true
+  from   = "/api/lots/*"
+  to     = "/.netlify/functions/lots-get?id=:splat"
+  status = 200
+  force  = true
 
 [[redirects]]
   from   = "/*"
