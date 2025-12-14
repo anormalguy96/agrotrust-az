@@ -100,20 +100,31 @@ function mapRawLot(raw: RawLot): Lot {
   };
 }
 
-async function fetchSampleLots(): Promise<Lot[]> {
-  const res = await fetch("/mock/sample-lots.json", {
-    headers: { "Content-Type": "application/json" }
-  });
+async function fetchLotById(lotId: string): Promise<Lot | null> {
+  if (!lotId) return null;
 
-  if (!res.ok) throw new Error("Failed to load sample lots.");
+  if (env.enableMocks) {
+    const lots = await fetchSampleLots();
+    return lots.find((l) => l.id === lotId) ?? null;
+  }
 
-  const data = (await res.json()) as unknown;
-  if (!Array.isArray(data)) return [];
+  const res = await fetch(`/api/lots/${encodeURIComponent(lotId)}`);
+  const ct = res.headers.get("content-type") || "";
+  const text = await res.text().catch(() => "");
 
-  return (data as RawLot[])
-    .filter((item) => item && typeof item.id === "string")
-    .map(mapRawLot);
+  if (res.status === 404) return null;
+
+  if (!res.ok) {
+    throw new Error(text || `Failed to load lot (${res.status}).`);
+  }
+
+  if (!ct.includes("application/json")) {
+    throw new Error(`Expected JSON, got ${ct}: ${text.slice(0, 120)}`);
+  }
+
+  return JSON.parse(text) as Lot;
 }
+
 
 async function fetchLotById(lotId: string): Promise<Lot | null> {
   if (!lotId) return null;
