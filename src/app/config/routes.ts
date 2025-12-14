@@ -26,7 +26,7 @@ export const ROUTES = {
     CONTRACTS: "/dashboard/contracts",
     SETTINGS: "/dashboard/settings",
     ADMIN_USERS: "/dashboard/admin/users",
-    ADMIN_ANALYTICS: "/dashboard/analytics",
+    ADMIN_ANALYTICS: "/dashboard/admin/analytics",
     ADMIN_USERLIST: "/dashboard/admin/AdminUserList",
     LOT_CREATE:"/dashboard/lots/new"
   }
