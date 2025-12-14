@@ -28,6 +28,7 @@ export function LotCreate() {
   const { user } = useAuth();
 
   const [productName, setProductName] = useState("");
+  const [cooperativeId, setCooperativeId] = useState(user?.cooperativeId || "");
   const [variety, setVariety] = useState("");
   const [region, setRegion] = useState("");
   const [harvestDate, setHarvestDate] = useState("");
@@ -80,7 +81,7 @@ export function LotCreate() {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div>
           <h1 className="dash-title">Create lot</h1>
-          <p className="muted">Creates a real lot in the database (no mocks).</p>
+          <p className="muted">Creates a real lot in the database.</p>
         </div>
 
         <NavLink to={ROUTES.DASHBOARD.LOTS} className="btn btn--ghost">
@@ -89,6 +90,11 @@ export function LotCreate() {
       </div>
 
       <form onSubmit={onSubmit} className="stack stack--md" style={{ marginTop: 16 }}>
+        <label className="form-label">
+          Cooperative ID
+          <input className="input" value={cooperativeId} onChange={(e) => setCooperativeId(e.target.value)} />
+        </label>
+
         <label className="form-label">
           Product name
           <input className="input" value={productName} onChange={(e) => setProductName(e.target.value)} />

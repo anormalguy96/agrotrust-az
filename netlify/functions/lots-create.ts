@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 type Body = {
-  cooperativeId: string;
+  cooperativeId?: string;
   productName: string;
   variety?: string;
   quantityKg: number;
