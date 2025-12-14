@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
 import { AdminOnlyRoute } from "@/components/AdminOnlyRoute";
-
+import EscrowInit from "@/pages/dashboard/EscrowInit";
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 
@@ -33,6 +33,8 @@ import { Analytics } from "@/pages/dashboard/Analytics";
 
 import { NotFound } from "@/pages/errors/NotFound";
 import { Forbidden } from "@/pages/errors/Forbidden";
+
+<Route path="/dashboard/escrow/init" element={<EscrowInit />} />
 
 export const router = createBrowserRouter([
   {
