@@ -3,5 +3,5 @@ playwright-core/.local-browsers/
 dist/
 build/
 .env
-# Local Netlify folder
+.env.*
 .netlify
