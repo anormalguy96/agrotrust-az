@@ -1,55 +1,55 @@
-import { createBrowserRouter, Navigate} from "react-router-dom";
-import { AdminUserList } from "@/pages/admin/AdminUserList";
-import { AdminOnlyRoute } from "@/components/AdminOnlyRoute";
-import { AdminUsers } from "@/pages/dashboard/AdminUsers";
-import { Analytics } from "@/pages/dashboard/Analytics";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
-import AuthCallback from "@/pages/auth/callback/index";
+import { AdminOnlyRoute } from "@/components/AdminOnlyRoute";
+
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
+
 import { Home } from "@/pages/marketing/Home";
 import { HowItWorks } from "@/pages/marketing/HowItWorks";
 import { Standards } from "@/pages/marketing/Standards";
 import { ForFarmers } from "@/pages/marketing/ForFarmers";
 import { ForBuyers } from "@/pages/marketing/ForBuyers";
 import { Contact } from "@/pages/marketing/Contact";
+
 import { SignIn } from "@/pages/auth/SignIn";
 import { SignUp } from "@/pages/auth/SignUp";
 import { VerifyEmail } from "@/pages/auth/VerifyEmail";
+import AuthCallback from "@/pages/auth/callback";
+
 import { Overview } from "@/pages/dashboard/Overview";
 import { Lots } from "@/pages/dashboard/Lots";
+import { LotCreate } from "@/pages/dashboard/LotCreate";
 import { LotDetails } from "@/pages/dashboard/LotDetails";
 import { Cooperatives } from "@/pages/dashboard/Cooperatives";
 import { Buyers } from "@/pages/dashboard/Buyers";
 import { RFQs } from "@/pages/dashboard/RFQs";
 import { Contracts } from "@/pages/dashboard/Contracts";
 import { Settings } from "@/pages/dashboard/Settings";
+
+import { AdminUsers } from "@/pages/dashboard/AdminUsers";
+import { Analytics } from "@/pages/dashboard/Analytics";
+
 import { NotFound } from "@/pages/errors/NotFound";
 import { Forbidden } from "@/pages/errors/Forbidden";
-import { LotCreate } from "@/pages/dashboard/LotCreate";
-
 
 export const router = createBrowserRouter([
   {
-    path: ROUTES.HOME,
     element: <MarketingLayout />,
     children: [
-      { index: true, element: <Home /> },
-      { path: ROUTES.HOW_IT_WORKS.replace("/", ""), element: <HowItWorks /> },
-      { path: ROUTES.STANDARDS.replace("/", ""), element: <Standards /> },
-      { path: ROUTES.FOR_FARMERS.replace("/", ""), element: <ForFarmers /> },
-      { path: ROUTES.FOR_BUYERS.replace("/", ""), element: <ForBuyers /> },
-      { path: ROUTES.CONTACT.replace("/", ""), element: <Contact /> },
-      { path: "auth/sign-in", element: <SignIn /> },
-      { path: "auth/sign-up", element: <SignUp /> },
-      { path: "auth/verify-email", element: <VerifyEmail /> },
-      { path: "auth/callback", element: <AuthCallback /> },
+      { path: ROUTES.HOME, element: <Home /> },
+      { path: ROUTES.HOW_IT_WORKS, element: <HowItWorks /> },
+      { path: ROUTES.STANDARDS, element: <Standards /> },
+      { path: ROUTES.FOR_FARMERS, element: <ForFarmers /> },
+      { path: ROUTES.FOR_BUYERS, element: <ForBuyers /> },
+      { path: ROUTES.CONTACT, element: <Contact /> },
 
-      { path: "forbidden", element: <Forbidden /> },
-
-      { path: "*", element: <NotFound /> }
-    ]
+      { path: ROUTES.AUTH.SIGN_IN, element: <SignIn /> },
+      { path: ROUTES.AUTH.SIGN_UP, element: <SignUp /> },
+      { path: ROUTES.AUTH.VERIFY_EMAIL, element: <VerifyEmail /> },
+      { path: ROUTES.AUTH.CALLBACK, element: <AuthCallback /> },
+    ],
   },
 
   {
@@ -62,21 +62,23 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Overview /> },
 
-      { path: "lots", element: <Lots /> },
-      { path: "lots/:lotId", element: <LotDetails /> },
-      { path: "lots/new", element: <LotCreate /> },
-      { path: "cooperatives", element: <Cooperatives /> },
-      { path: "buyers", element: <Buyers /> },
-      { path: "rfqs", element: <RFQs /> },
-      { path: "contracts", element: <Contracts /> },
-      { path: "settings", element: <Settings /> },
+      { path: ROUTES.DASHBOARD.LOTS, element: <Lots /> },
+      { path: ROUTES.DASHBOARD.LOT_CREATE, element: <LotCreate /> },
+      { path: ROUTES.DASHBOARD.LOT_DETAILS, element: <LotDetails /> },
+
+      { path: ROUTES.DASHBOARD.COOPERATIVES, element: <Cooperatives /> },
+      { path: ROUTES.DASHBOARD.BUYERS, element: <Buyers /> },
+      { path: ROUTES.DASHBOARD.RFQS, element: <RFQs /> },
+      { path: ROUTES.DASHBOARD.CONTRACTS, element: <Contracts /> },
+      { path: ROUTES.DASHBOARD.SETTINGS, element: <Settings /> },
+
       {
         path: ROUTES.DASHBOARD.ADMIN_USERS,
         element: (
           <AdminOnlyRoute>
             <AdminUsers />
           </AdminOnlyRoute>
-        )
+        ),
       },
       {
         path: ROUTES.DASHBOARD.ADMIN_ANALYTICS,
@@ -84,26 +86,13 @@ export const router = createBrowserRouter([
           <AdminOnlyRoute>
             <Analytics />
           </AdminOnlyRoute>
-        )
+        ),
       },
-      {
-        path: ROUTES.DASHBOARD.ADMIN_USERLIST,
-        element: (
-          <AdminOnlyRoute>
-            <AdminUserList />
-          </AdminOnlyRoute>
-        )
-      },
-      { path: "*", element: <NotFound /> }
-    ]
+    ],
   },
 
-  {
-    path: "/404",
-    element: <NotFound />
-  },
-  {
-    path: "*",
-    element: <Navigate to="/404" replace />
-  }
+  { path: ROUTES.FORBIDDEN, element: <Forbidden /> },
+  { path: "/dashboard/admin", element: <Navigate to={ROUTES.DASHBOARD.ADMIN_USERS} replace /> },
+
+  { path: "*", element: <NotFound /> },
 ]);
