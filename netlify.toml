@@ -38,6 +38,11 @@
   from   = "/api/health"
   to     = "/.netlify/functions/health"
   status = 200
+  
+[[redirects]]
+  from = "/api/lots/:id"
+  to = "/.netlify/functions/lots-get?id=:id"
+  status = 200
 
 [[redirects]]
   from   = "/*"
