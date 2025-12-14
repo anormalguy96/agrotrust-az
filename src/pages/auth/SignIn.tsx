@@ -1,32 +1,22 @@
 import { FormEvent, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+
 import { ROUTES } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabaseClient";
 
-type LoginResponse = {
-  user?: {
-    id: string;
-    email: string;
-    role: "cooperative" | "buyer" | "admin";
-    firstName?: string;
-    lastName?: string;
-  };
-  error?: string;
+type UiUser = {
+  id: string;
+  email: string;
+  role: "cooperative" | "buyer" | "admin";
+  firstName?: string;
+  lastName?: string;
 };
-
-function safeJsonParse<T>(text: string): T | null {
-  try {
-    if (!text) return null;
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
 
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const auth = useAuth() as any; // keep flexible while your auth hook evolves
+  const auth = useAuth() as any;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,34 +34,56 @@ export function SignIn() {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/.netlify/functions/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // keep cookies if your backend sets any
-        credentials: "same-origin",
-        body: JSON.stringify({ email: email.trim(), password }),
+      // 1) Sign in with Supabase Auth (REAL session)
+      const { data, error: signErr } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
       });
 
-      const text = await res.text().catch(() => "");
-      const data = safeJsonParse<LoginResponse>(text) ?? {};
-
-      if (!res.ok || data.error || !data.user) {
-        const msg =
-          data.error ||
-          (text && text.length < 300 ? text : "") ||
-          `Login failed (${res.status}).`;
-        setError(msg);
+      if (signErr) {
+        setError(signErr.message);
         return;
       }
 
-      if (typeof auth?.setUser === "function") {
-        auth.setUser(data.user);
-      } else if (typeof auth?.signIn === "function") {
-        auth.signIn(data.user);
-      } else {
-        // This is the “r is not a function” class of bug.
-        throw new Error("Auth provider is missing setUser/signIn.");
+      const user = data.user;
+      if (!user) {
+        setError("Sign-in failed: missing user.");
+        return;
       }
+
+      // 2) Load profile (role/name) for UI
+      const { data: profile, error: profErr } = await supabase
+        .from("profiles")
+        .select("id, email, first_name, last_name, role")
+        .eq("id", user.id)
+        .single();
+
+      // If profiles table is not ready / RLS blocks select, still allow sign-in
+      // but UI role/name might be unknown.
+      let uiUser: UiUser = {
+        id: user.id,
+        email: user.email ?? email.trim(),
+        role: "cooperative",
+      };
+
+      if (!profErr && profile) {
+        uiUser = {
+          id: profile.id,
+          email: profile.email,
+          firstName: profile.first_name ?? undefined,
+          lastName: profile.last_name ?? undefined,
+          role:
+            profile.role === "admin"
+              ? "admin"
+              : profile.role === "buyer"
+              ? "buyer"
+              : "cooperative",
+        };
+      }
+
+      // 3) Keep your existing UI auth hook working
+      if (typeof auth?.setUser === "function") auth.setUser(uiUser);
+      else if (typeof auth?.signIn === "function") auth.signIn(uiUser);
 
       navigate(from, { replace: true });
     } catch (err) {
@@ -88,7 +100,7 @@ export function SignIn() {
         <div className="card" style={{ maxWidth: 520, margin: "0 auto" }}>
           <h1 className="dash-title">Sign in to AgroTrust AZ</h1>
           <p className="muted" style={{ marginBottom: "1.5rem" }}>
-            Use your registered email and password.
+            This uses real Supabase authentication.
           </p>
 
           <form onSubmit={handleSubmit} className="stack stack--md" noValidate>
@@ -134,10 +146,6 @@ export function SignIn() {
               </NavLink>
             </div>
           </form>
-
-          <p className="muted" style={{ marginTop: "1.25rem", fontSize: "0.8rem" }}>
-            Admin email: <strong>agrotrust.az@gmail.com</strong>
-          </p>
         </div>
       </div>
     </main>
