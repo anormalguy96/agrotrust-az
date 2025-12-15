@@ -25,7 +25,8 @@ export const handler: Handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing userId" }) };
     }
 
-    const updateRow: any = {
+    const row = {
+      app_user_id: userId,
       full_name: payload.fullName ?? null,
       phone: payload.phone ?? null,
       company_name: payload.companyName ?? null,
@@ -36,8 +37,7 @@ export const handler: Handler = async (event) => {
 
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .update(updateRow)
-      .eq("id", userId)
+      .upsert(row, { onConflict: "app_user_id" })
       .select("*")
       .single();
 
