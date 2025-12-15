@@ -1,18 +1,13 @@
-// agrotrust-az/src/features/passport/components/PassportQR.tsx
-
 import { useMemo, useState } from "react";
-
 import { Button } from "@/components/common/Button";
 import { Card } from "@/components/common/Card";
 
 type PassportQRSize = "sm" | "md" | "lg";
 
 export type PassportQRProps = {
-  /**
-   * The QR payload string. In our MVP this is often the
-   * Netlify verify endpoint URL produced by buildQrData().
-   */
-  data: string;
+  passportId?: string | null;
+  qrPayload?: string | null;
+  data?: string;
 
   title?: string;
   subtitle?: string;
@@ -23,24 +18,42 @@ export type PassportQRProps = {
   className?: string;
 };
 
-/**
- * PassportQR
- *
- * Hackathon-friendly QR renderer.
- *
- * To keep this MVP dependency-free, we use a simple public QR image endpoint.
- * If you later want an offline/enterprise-safe version, we can switch to a
- * local QR generator utility.
- */
+function looksLikeUrl(v: string) {
+  return /^https?:\/\/|^\//i.test(v.trim());
+}
+
+function safeJsonParse<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+function guessPassportIdFromPayload(payload: string): string | null {
+  const obj = safeJsonParse<any>(payload);
+  const id = obj?.passportId;
+  if (typeof id === "string" && id.trim()) return id.trim();
+  return null;
+}
+
+function buildBuyerVerifyUrl(passportId: string) {
+  const base = window.location.origin;
+  
+  return `${base}/buyers/passport?passportId=${encodeURIComponent(passportId)}`;
+}
+
 export function PassportQR({
+  passportId,
+  qrPayload,
   data,
   title = "Passport QR",
-  subtitle = "Scan to verify origin and quality trail",
+  subtitle = "Scan to verify passport details",
   size = "md",
   showDataText = false,
   className
 }: PassportQRProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"link" | "payload" | null>(null);
 
   const px = useMemo(() => {
     switch (size) {
@@ -53,21 +66,49 @@ export function PassportQR({
     }
   }, [size]);
 
-  const qrSrc = useMemo(() => {
-    const encoded = encodeURIComponent(data || "");
-    // Public QR image generator for MVP demos
-    return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&data=${encoded}`;
-  }, [data, px]);
+  const resolved = useMemo(() => {
+    const fallback = (data || "").trim();
 
-  async function handleCopy() {
+    const payloadCandidate = (qrPayload || "").trim() || fallback;
+
+    const id =
+      (passportId || "").trim() ||
+      
+      (payloadCandidate ? guessPassportIdFromPayload(payloadCandidate) : null) ||
+      null;
+
+    let verifyLink = "";
+    if (fallback && looksLikeUrl(fallback)) {
+      verifyLink = fallback;
+    } else if (id && typeof window !== "undefined") {
+      verifyLink = buildBuyerVerifyUrl(id);
+    }
+
+    return {
+      passportId: id,
+      verifyLink,
+      rawPayload: payloadCandidate || ""
+    };
+  }, [passportId, qrPayload, data]);
+
+  const qrSrc = useMemo(() => {
+    const toEncode = resolved.verifyLink || resolved.rawPayload || "";
+    const encoded = encodeURIComponent(toEncode);
+    return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&data=${encoded}`;
+  }, [resolved.verifyLink, resolved.rawPayload, px]);
+
+  async function copyToClipboard(text: string, which: "link" | "payload") {
     try {
-      await navigator.clipboard.writeText(data);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      window.setTimeout(() => setCopied(null), 1200);
     } catch {
-      setCopied(false);
+      setCopied(null);
     }
   }
+
+  const canCopyLink = Boolean(resolved.verifyLink);
+  const canCopyPayload = Boolean(resolved.rawPayload);
 
   return (
     <Card
@@ -80,12 +121,30 @@ export function PassportQR({
         <div>
           <div className="passport-qr__label">Digital Product Passport</div>
           <div className="passport-qr__title">{title}</div>
-          {subtitle ? <div className="muted passport-qr__subtitle">{subtitle}</div> : null}
+          {subtitle ? (
+            <div className="muted passport-qr__subtitle">{subtitle}</div>
+          ) : null}
         </div>
 
         <div className="passport-qr__actions">
-          <Button variant="ghost" size="sm" onClick={handleCopy}>
-            {copied ? "Copied" : "Copy QR data"}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canCopyLink}
+            onClick={() => copyToClipboard(resolved.verifyLink, "link")}
+            title={canCopyLink ? "Copy verification link" : "No verification link available"}
+          >
+            {copied === "link" ? "Copied link" : "Copy link"}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canCopyPayload}
+            onClick={() => copyToClipboard(resolved.rawPayload, "payload")}
+            title={canCopyPayload ? "Copy raw payload" : "No payload available"}
+          >
+            {copied === "payload" ? "Copied payload" : "Copy payload"}
           </Button>
         </div>
       </div>
@@ -97,20 +156,40 @@ export function PassportQR({
             src={qrSrc}
             width={px}
             height={px}
-            alt="Passport verification QR code"
+            alt="Passport QR code"
             loading="lazy"
           />
         </div>
 
         {showDataText && (
-          <code className="passport-qr__data">
-            {data}
-          </code>
+          <div className="passport-qr__debug">
+            <div className="passport-qr__debug-row">
+              <div className="passport-qr__debug-label">Passport ID</div>
+              <code className="passport-qr__debug-code">
+                {resolved.passportId ?? "—"}
+              </code>
+            </div>
+
+            <div className="passport-qr__debug-row">
+              <div className="passport-qr__debug-label">Verification link</div>
+              <code className="passport-qr__debug-code">
+                {resolved.verifyLink || "—"}
+              </code>
+            </div>
+
+            <div className="passport-qr__debug-row">
+              <div className="passport-qr__debug-label">Raw payload</div>
+              <code className="passport-qr__debug-code">
+                {resolved.rawPayload || "—"}
+              </code>
+            </div>
+          </div>
         )}
       </div>
 
       <div className="passport-qr__foot muted">
-        For the hackathon MVP this QR is generated via a lightweight public service.
+        QR encodes a buyer-friendly verification link (preferred). If no link is available,
+        it falls back to encoding the raw payload.
       </div>
 
       <style>
@@ -170,7 +249,25 @@ export function PassportQR({
             background: var(--color-surface);
           }
 
-          .passport-qr__data{
+          .passport-qr__debug{
+            width: 100%;
+            display: grid;
+            gap: 10px;
+          }
+
+          .passport-qr__debug-row{
+            display: grid;
+            gap: 6px;
+          }
+
+          .passport-qr__debug-label{
+            font-size: var(--fs-1);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--color-text-soft);
+          }
+
+          .passport-qr__debug-code{
             display:block;
             width: 100%;
             padding: 10px 12px;
@@ -179,6 +276,7 @@ export function PassportQR({
             background: var(--color-elevated);
             font-size: var(--fs-1);
             overflow-wrap: anywhere;
+            white-space: pre-wrap;
           }
 
           .passport-qr__foot{
