@@ -1,5 +1,3 @@
-// agrotrust-az/src/features/passport/components/PassportPreview.tsx
-
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -22,20 +20,26 @@ export type PassportPreviewProps = {
   passport?: Passport | null;
   variant?: PassportPreviewVariant;
 
-  /**
-   * Optional slot for additional actions (e.g., "Verify", "Download PDF")
-   */
   actions?: ReactNode;
 
   className?: string;
 };
 
-/**
- * PassportPreview
- *
- * A clean, judge-friendly summary card for a single Digital Product Passport.
- * Used in dashboards and feature-level views.
- */
+function asString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+function asNumber(v: unknown): number | null {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function short(text: string, max = 220) {
+  const t = (text || "").trim();
+  if (!t) return "";
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
 export function PassportPreview({
   passport,
   variant = "default",
@@ -46,9 +50,7 @@ export function PassportPreview({
     return (
       <Card className={["passport-preview", className].filter(Boolean).join(" ")}>
         <div className="passport-preview__empty">
-          <div className="passport-preview__empty-title">
-            No passport selected
-          </div>
+          <div className="passport-preview__empty-title">No passport selected</div>
           <div className="muted">
             Choose a lot and create a Digital Product Passport to see a preview here.
           </div>
@@ -71,12 +73,60 @@ export function PassportPreview({
     );
   }
 
+  const p: any = passport as any;
+  const productObj: any = p.product ?? {};
+
+  const productName =
+    asString(productObj.product) ||
+    asString(productObj.name) ||
+    asString(p.product_name) ||
+    asString(p.productName) ||
+    "Unnamed product";
+
+  const variety =
+    asString(productObj.variety) ||
+    asString(p.product_variety) ||
+    asString(p.variety);
+
+  const grade = asString(productObj.grade) || asString(p.grade);
+
+  const region =
+    asString(productObj.region) ||
+    asString(p.region) ||
+    "—";
+
+  const harvestDate =
+    asString(productObj.harvestDate) ||
+    asString(p.harvest_date) ||
+    asString(p.harvestDate) ||
+    "";
+
+  const quantityKg =
+    asNumber(productObj.quantityKg) ??
+    asNumber(productObj.quantity) ??
+    asNumber(p.quantityKg) ??
+    asNumber(p.quantity_kg) ??
+    null;
+
+  const unit =
+    asString(productObj.unit) ||
+    asString(p.unit) ||
+    "kg";
+
+  const coopName =
+    asString(p.owner?.coopName) ||
+    asString(p.owner?.name) ||
+    asString(p.coopName) ||
+    "Unknown";
+
   const certCodes = getCertificationCodes(passport);
   const latestTrace = getLatestTraceDate(passport.traceability ?? []);
 
   const tone = statusToTone(passport.status);
-
   const isCompact = variant === "compact";
+
+  const qrPreview =
+    asString(p.qrData) ? short(String(p.qrData), 260) : "";
 
   return (
     <Card
@@ -85,30 +135,22 @@ export function PassportPreview({
         "passport-preview",
         `passport-preview--${variant}`,
         className
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      ].filter(Boolean).join(" ")}
     >
       <header className="passport-preview__head">
         <div className="passport-preview__head-left">
-          <div className="passport-preview__kicker">
-            Digital Product Passport
-          </div>
+          <div className="passport-preview__kicker">Digital Product Passport</div>
+
           <div className="passport-preview__title">
-            {passport.product.product}
-            {passport.product.variety ? (
-              <span className="passport-preview__title-sub">
-                {" "}
-                • {passport.product.variety}
-              </span>
+            {productName}
+            {variety ? (
+              <span className="passport-preview__title-sub"> • {variety}</span>
             ) : null}
           </div>
         </div>
 
         <div className="passport-preview__head-right">
-          <Badge variant={tone as any}>
-            {passport.status}
-          </Badge>
+          <Badge variant={tone as any}>{passport.status}</Badge>
           {actions ? <div className="passport-preview__actions">{actions}</div> : null}
         </div>
       </header>
@@ -127,10 +169,7 @@ export function PassportPreview({
               <span className="pp-kv__label">Lot</span>
               <span className="pp-kv__value">
                 {passport.lotId ? (
-                  <NavLink
-                    to={lotDetailsPath(passport.lotId)}
-                    className="pp-link mono"
-                  >
+                  <NavLink to={lotDetailsPath(passport.lotId)} className="pp-link mono">
                     {passport.lotId}
                   </NavLink>
                 ) : (
@@ -141,18 +180,12 @@ export function PassportPreview({
 
             <div className="pp-kv__row">
               <span className="pp-kv__label">Cooperative</span>
-              <span className="pp-kv__value">
-                {passport.owner?.coopName ?? (
-                  <span className="muted">Unknown</span>
-                )}
-              </span>
+              <span className="pp-kv__value">{coopName}</span>
             </div>
 
             <div className="pp-kv__row">
               <span className="pp-kv__label">Created</span>
-              <span className="pp-kv__value">
-                {formatDateShort(passport.createdAt)}
-              </span>
+              <span className="pp-kv__value">{formatDateShort(passport.createdAt)}</span>
             </div>
           </div>
         </section>
@@ -163,36 +196,32 @@ export function PassportPreview({
           <div className="pp-kv">
             <div className="pp-kv__row">
               <span className="pp-kv__label">Product</span>
-              <span className="pp-kv__value">
-                {passport.product.product}
-              </span>
+              <span className="pp-kv__value">{productName}</span>
             </div>
 
-            {!isCompact && passport.product.grade ? (
+            {!isCompact && grade ? (
               <div className="pp-kv__row">
                 <span className="pp-kv__label">Grade</span>
-                <span className="pp-kv__value">{passport.product.grade}</span>
+                <span className="pp-kv__value">{grade}</span>
               </div>
             ) : null}
 
             <div className="pp-kv__row">
               <span className="pp-kv__label">Region</span>
-              <span className="pp-kv__value">
-                {passport.product.region ?? <span className="muted">—</span>}
-              </span>
+              <span className="pp-kv__value">{region}</span>
             </div>
 
             <div className="pp-kv__row">
               <span className="pp-kv__label">Harvest date</span>
               <span className="pp-kv__value">
-                {formatDateShort(passport.product.harvestDate)}
+                {harvestDate ? formatDateShort(harvestDate) : <span className="muted">—</span>}
               </span>
             </div>
 
             <div className="pp-kv__row">
               <span className="pp-kv__label">Quantity</span>
               <span className="pp-kv__value">
-                {formatKg(passport.product.quantityKg)}
+                {quantityKg == null ? <span className="muted">—</span> : `${formatKg(quantityKg)} ${unit}`}
               </span>
             </div>
           </div>
@@ -202,9 +231,7 @@ export function PassportPreview({
           <div className="passport-preview__section-title">Certifications</div>
 
           {certCodes.length === 0 ? (
-            <div className="muted">
-              No certifications listed for this passport yet.
-            </div>
+            <div className="muted">No certifications listed for this passport yet.</div>
           ) : (
             <div className="passport-preview__chips">
               {certCodes.map((c) => (
@@ -228,9 +255,7 @@ export function PassportPreview({
           <div className="pp-kv">
             <div className="pp-kv__row">
               <span className="pp-kv__label">Events</span>
-              <span className="pp-kv__value">
-                {(passport.traceability ?? []).length}
-              </span>
+              <span className="pp-kv__value">{(passport.traceability ?? []).length}</span>
             </div>
 
             <div className="pp-kv__row">
@@ -241,21 +266,16 @@ export function PassportPreview({
             </div>
           </div>
 
-          {!isCompact && passport.qrData ? (
+          {!isCompact && qrPreview ? (
             <div className="passport-preview__qrline">
               <span className="passport-preview__qrlabel">QR payload</span>
-              <code className="passport-preview__qrcode">
-                {passport.qrData}
-              </code>
+              <code className="passport-preview__qrcode">{qrPreview}</code>
             </div>
           ) : null}
 
           {!isCompact && (
             <div className="passport-preview__actions-row">
-              <NavLink
-                className="btn btn--soft btn--sm"
-                to={ROUTES.DASHBOARD.LOTS}
-              >
+              <NavLink className="btn btn--soft btn--sm" to={ROUTES.DASHBOARD.LOTS}>
                 Back to lots
               </NavLink>
             </div>
@@ -413,6 +433,7 @@ export function PassportPreview({
             background: var(--color-elevated);
             font-size: var(--fs-1);
             overflow-wrap: anywhere;
+            white-space: pre-wrap;
           }
 
           .passport-preview__actions-row{
