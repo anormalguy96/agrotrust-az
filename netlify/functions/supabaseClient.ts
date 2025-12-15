@@ -1,16 +1,36 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let _client: SupabaseClient | null = null;
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-  
-  console.error("Supabase admin env vars missing at runtime:", {
-    has_SUPABASE_URL: !!process.env.SUPABASE_URL,
-    has_SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-  });
-
-  throw new Error("Supabase admin env vars missing at runtime");
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) {
+    console.error("Missing required env var at runtime:", {
+      name,
+      available: Object.keys(process.env).filter((k) =>
+        k.includes("SUPABASE")
+      ),
+    });
+    throw new Error(`Missing env var: ${name}`);
+  }
+  return v;
 }
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+export function getSupabaseAdmin(): SupabaseClient {
+  if (_client) return _client;
+
+  const supabaseUrl = requireEnv("SUPABASE_URL");
+  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+  _client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+
+  return _client;
+}
+
+export const supabaseAdmin = getSupabaseAdmin();
