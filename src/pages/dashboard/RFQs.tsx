@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 import { useAuth } from "@/hooks/useAuth";
 
-// ---------- RFQ types & backend mapping ----------
+// ---------- Types ----------
 
 export type RFQStatus = "draft" | "sent" | "answered" | "closed";
 
@@ -15,49 +15,59 @@ export type RFQ = {
   status: RFQStatus;
 
   buyerId?: string;
-  buyerName?: string;
+  cooperativeId?: string;
 
   product: string;
   quantityKg: number;
 
   targetPricePerKg?: number;
-  preferredCertifications?: string[];
   regionPreference?: string;
 
   lotId?: string;
   notes?: string;
+
+
+  buyerName?: string;
+  preferredCertifications?: string[];
 };
 
 type RfqListRow = {
   id?: string;
+
   created_at?: string;
   createdAt?: string;
-  status?: RFQStatus;
+
+  status?: RFQStatus | string;
 
   buyer_id?: string | null;
   buyerId?: string | null;
-  buyer_name?: string | null;
-  buyerName?: string | null;
 
-  product?: string;
-  product_name?: string;
-
-  quantity_kg?: number;
-  quantityKg?: number;
-
-  target_price_per_kg?: number | null;
-  targetPricePerKg?: number | null;
-
-  region_preference?: string | null;
-  regionPreference?: string | null;
+  cooperative_id?: string | null;
+  cooperativeId?: string | null;
 
   lot_id?: string | null;
   lotId?: string | null;
 
-  preferred_certifications?: string[] | null;
-  preferredCertifications?: string[] | null;
+  product_name?: string;
+  productName?: string;
+  product?: string; // tolerate legacy
+
+  quantity_kg?: number | string;
+  quantityKg?: number | string;
+
+  target_price_per_kg?: number | string | null;
+  targetPricePerKg?: number | string | null;
+
+  region_preference?: string | null;
+  regionPreference?: string | null;
 
   notes?: string | null;
+
+  // tolerate legacy fields if backend ever returns them
+  buyer_name?: string | null;
+  buyerName?: string | null;
+  preferred_certifications?: string[] | null;
+  preferredCertifications?: string[] | null;
 };
 
 function safeJsonParse<T>(text: string): T | null {
@@ -75,36 +85,63 @@ function shortText(text: string, max = 450) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+function toStatus(v: unknown): RFQStatus {
+  const s = String(v || "").toLowerCase().trim();
+  if (s === "draft" || s === "sent" || s === "answered" || s === "closed") return s;
+  return "draft";
+}
+
+function toNumber(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(String(v ?? ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function mapRfqRow(row: RfqListRow): RFQ {
+  const product = (row.product_name ?? row.productName ?? row.product ?? "").trim();
+
   return {
     id: row.id ?? "",
     createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
-    status: (row.status ?? "draft") as RFQStatus,
+    status: toStatus(row.status),
 
     buyerId: row.buyer_id ?? row.buyerId ?? undefined,
-    buyerName: row.buyer_name ?? row.buyerName ?? undefined,
+    cooperativeId: row.cooperative_id ?? row.cooperativeId ?? undefined,
 
-    product: (row.product ?? row.product_name ?? "").trim(),
-    quantityKg: row.quantity_kg ?? row.quantityKg ?? 0,
+    product,
+    quantityKg: toNumber(row.quantity_kg ?? row.quantityKg),
 
-    targetPricePerKg: row.target_price_per_kg ?? row.targetPricePerKg ?? undefined,
+    targetPricePerKg:
+      row.target_price_per_kg == null && row.targetPricePerKg == null
+        ? undefined
+        : toNumber(row.target_price_per_kg ?? row.targetPricePerKg),
+
     regionPreference: row.region_preference ?? row.regionPreference ?? undefined,
     lotId: row.lot_id ?? row.lotId ?? undefined,
-
-    preferredCertifications: row.preferred_certifications ?? row.preferredCertifications ?? undefined,
     notes: row.notes ?? undefined,
+
+    // legacy/optional
+    buyerName: row.buyer_name ?? row.buyerName ?? undefined,
+    preferredCertifications: row.preferred_certifications ?? row.preferredCertifications ?? undefined,
   };
 }
 
 // ---------- Backend calls ----------
 
 const FN_BASE = "/.netlify/functions";
-const RFQ_LIST = `${FN_BASE}/rfq-list`;
-const RFQ_CREATE = `${FN_BASE}/rfq-create`;
-const RFQ_UPDATE_STATUS = `${FN_BASE}/rfq-update-status`;
+const RFQ_LIST = `${FN_BASE}/rfqs-list`;
+const RFQ_CREATE = `${FN_BASE}/rfqs-create`;
+const RFQ_UPDATE_STATUS = `${FN_BASE}/rfqs-update-status`;
 
-async function fetchRfqs(): Promise<RFQ[]> {
-  const res = await fetch(RFQ_LIST, {
+type FetchRfqsArgs = { role?: string; userId?: string };
+
+async function fetchRfqs(args?: FetchRfqsArgs): Promise<RFQ[]> {
+  const qs = new URLSearchParams();
+  if (args?.role) qs.set("role", args.role);
+  if (args?.userId) qs.set("userId", args.userId);
+
+  const url = qs.toString() ? `${RFQ_LIST}?${qs.toString()}` : RFQ_LIST;
+
+  const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
   });
@@ -113,23 +150,32 @@ async function fetchRfqs(): Promise<RFQ[]> {
   if (!res.ok) throw new Error(shortText(text) || "Failed to load RFQs.");
 
   const data = safeJsonParse<unknown>(text);
-  if (!Array.isArray(data)) return [];
-  return (data as RfqListRow[]).map(mapRfqRow);
+
+  // Support BOTH: array response OR { items: [...] }
+  const arr =
+    Array.isArray(data) ? data :
+    data && typeof data === "object" && Array.isArray((data as any).items) ? (data as any).items :
+    [];
+
+  return (arr as RfqListRow[]).map(mapRfqRow);
 }
 
 type CreateRfqInput = {
   buyerId?: string;
-  buyerName?: string;
+  cooperativeId?: string;
 
-  product: string;
+  productName: string;
   quantityKg: number;
 
   targetPricePerKg?: number;
   regionPreference?: string;
 
   lotId?: string;
-  preferredCertifications?: string[];
   notes?: string;
+
+  // keep these in UI if you want, but they are NOT saved unless DB has columns
+  buyerName?: string;
+  preferredCertifications?: string[];
 };
 
 async function createRfq(input: CreateRfqInput): Promise<RFQ> {
@@ -139,13 +185,14 @@ async function createRfq(input: CreateRfqInput): Promise<RFQ> {
     credentials: "same-origin",
     body: JSON.stringify({
       buyerId: input.buyerId ?? null,
-      buyerName: input.buyerName ?? null,
-      product: input.product,
+      cooperativeId: input.cooperativeId ?? null,
+      lotId: input.lotId ?? null,
+
+      // match your DB schema
+      productName: input.productName,
       quantityKg: input.quantityKg,
       targetPricePerKg: input.targetPricePerKg ?? null,
       regionPreference: input.regionPreference ?? null,
-      lotId: input.lotId ?? null,
-      preferredCertifications: input.preferredCertifications ?? [],
       notes: input.notes ?? null,
     }),
   });
@@ -176,14 +223,10 @@ async function updateRfqStatus(input: UpdateRfqStatusInput): Promise<RFQ> {
 
 function statusLabel(s: RFQStatus) {
   switch (s) {
-    case "draft":
-      return "Draft";
-    case "sent":
-      return "Sent";
-    case "answered":
-      return "Answered";
-    case "closed":
-      return "Closed";
+    case "draft": return "Draft";
+    case "sent": return "Sent";
+    case "answered": return "Answered";
+    case "closed": return "Closed";
   }
 }
 
@@ -194,15 +237,18 @@ export function RFQs() {
   const queryClient = useQueryClient();
 
   const role = (user?.role || "").toLowerCase();
+  const userId = (user?.id || "").trim();
+
   const isBuyer = role === "buyer";
   const isAdmin = role === "admin";
+  const isCooperative = role === "cooperative";
 
   const canCreate = isBuyer || isAdmin;
   const canUpdateStatus = isAdmin;
 
   const rfqsQuery = useQuery({
-    queryKey: ["rfqs"],
-    queryFn: fetchRfqs,
+    queryKey: ["rfqs", role, userId],
+    queryFn: () => fetchRfqs({ role, userId }),
   });
 
   const rfqs = rfqsQuery.data ?? [];
@@ -224,16 +270,16 @@ export function RFQs() {
   const [statusFilter, setStatusFilter] = useState<RFQStatus | "all">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
 
-  const [buyerId, setBuyerId] = useState<string>("");
-  const [buyerName, setBuyerName] = useState<string>("");
 
   const [product, setProduct] = useState<string>("");
   const [quantityKg, setQuantityKg] = useState<string>("5000");
   const [targetPrice, setTargetPrice] = useState<string>("");
   const [regionPreference, setRegionPreference] = useState<string>("");
   const [lotId, setLotId] = useState<string>("");
-  const [preferredCertifications, setPreferredCertifications] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+
+  
+  const [buyerName, setBuyerName] = useState<string>("");
 
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -256,12 +302,10 @@ export function RFQs() {
 
   useEffect(() => {
     if (!showCreate) return;
-
-    if (!buyerId) setBuyerId((user?.id || "").trim());
     if (!buyerName) {
       setBuyerName((user?.name || user?.fullName || user?.email || "").trim());
     }
-  }, [showCreate, buyerId, buyerName, user?.id, user?.name, user?.fullName, user?.email]);
+  }, [showCreate, buyerName, user?.name, user?.fullName, user?.email]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -281,7 +325,6 @@ export function RFQs() {
         r.regionPreference,
         r.lotId,
         r.notes,
-        ...(r.preferredCertifications ?? []),
       ]
         .filter(Boolean)
         .join(" ")
@@ -292,16 +335,13 @@ export function RFQs() {
   }, [rfqs, query, statusFilter, productFilter]);
 
   function resetForm() {
-    setBuyerId((user?.id || "").trim());
-    setBuyerName((user?.name || user?.fullName || user?.email || "").trim());
-
     setProduct("");
     setQuantityKg("5000");
     setTargetPrice("");
     setRegionPreference("");
     setLotId("");
-    setPreferredCertifications("");
     setNotes("");
+    setBuyerName((user?.name || user?.fullName || user?.email || "").trim());
     setFormError(null);
   }
 
@@ -322,29 +362,22 @@ export function RFQs() {
       return setFormError("Target price must be a positive number (or leave it empty).");
     }
 
-    const certs = preferredCertifications
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const effectiveBuyerId = isBuyer ? (user?.id || "").trim() : buyerId.trim();
-    const effectiveBuyerName = buyerName.trim() || undefined;
-
-    if (!effectiveBuyerId && !isAdmin) {
-      setFormError("You must be signed in as a buyer to create an RFQ.");
-      return;
-    }
+    const effectiveBuyerId = isBuyer ? userId : undefined; // admin can create "unassigned buyer" RFQs
+    const effectiveCooperativeId = isCooperative ? userId : undefined;
 
     createMutation.mutate({
       buyerId: effectiveBuyerId || undefined,
-      buyerName: effectiveBuyerName,
-      product: product.trim(),
+      cooperativeId: effectiveCooperativeId || undefined,
+
+      productName: product.trim(),
       quantityKg: qty,
+
       targetPricePerKg: price,
       regionPreference: regionPreference.trim() || undefined,
       lotId: lotId.trim() || undefined,
-      preferredCertifications: certs.length ? certs : undefined,
       notes: notes.trim() || undefined,
+
+      buyerName: buyerName.trim() || undefined,
     });
   }
 
@@ -393,7 +426,7 @@ export function RFQs() {
               <div className="rfq-create__label">New RFQ</div>
               <div className="rfq-create__title">Create a real RFQ record</div>
               <div className="muted">
-                This is persisted in the backend (no demo/mock data). Use the returned RFQ ID later in Contracts/Escrow.
+                This is persisted in the backend (no demo/mock data).
               </div>
             </div>
             <div className="rfq-create__meta">
@@ -409,46 +442,15 @@ export function RFQs() {
           </div>
 
           <div className="rfq-form">
-            {isAdmin ? (
-              <>
-                <label className="rfq-label">
-                  Buyer ID (admin override)
-                  <input
-                    className="input"
-                    value={buyerId}
-                    onChange={(e) => setBuyerId(e.target.value)}
-                    placeholder="buyer UUID"
-                  />
-                </label>
-
-                <label className="rfq-label">
-                  Buyer name (optional)
-                  <input
-                    className="input"
-                    value={buyerName}
-                    onChange={(e) => setBuyerName(e.target.value)}
-                    placeholder="Buyer name"
-                  />
-                </label>
-              </>
-            ) : (
-              <>
-                <label className="rfq-label">
-                  Buyer ID (from login)
-                  <input className="input" value={(user?.id || "").trim()} readOnly />
-                </label>
-
-                <label className="rfq-label">
-                  Buyer name (optional)
-                  <input
-                    className="input"
-                    value={buyerName}
-                    onChange={(e) => setBuyerName(e.target.value)}
-                    placeholder="Your name (optional)"
-                  />
-                </label>
-              </>
-            )}
+            <label className="rfq-label">
+              Buyer name (UI-only for now)
+              <input
+                className="input"
+                value={buyerName}
+                onChange={(e) => setBuyerName(e.target.value)}
+                placeholder="Optional"
+              />
+            </label>
 
             <label className="rfq-label">
               Product
@@ -510,17 +512,7 @@ export function RFQs() {
                 className="input"
                 value={lotId}
                 onChange={(e) => setLotId(e.target.value)}
-                placeholder="lot UUID / id"
-              />
-            </label>
-
-            <label className="rfq-label rfq-label--full">
-              Preferred certifications (optional, comma-separated)
-              <input
-                className="input"
-                value={preferredCertifications}
-                onChange={(e) => setPreferredCertifications(e.target.value)}
-                placeholder="e.g., GLOBALG.A.P, Organic, ISO22000"
+                placeholder="lot id (text)"
               />
             </label>
 
@@ -567,7 +559,7 @@ export function RFQs() {
               className="input"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="RFQ ID, buyer, product, region…"
+              placeholder="RFQ ID, product, region…"
             />
           </label>
 
@@ -649,9 +641,7 @@ export function RFQs() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td>
-                    <code className="rfq-code">{r.id}</code>
-                  </td>
+                  <td><code className="rfq-code">{r.id}</code></td>
                   <td>{r.buyerName ?? r.buyerId ?? "—"}</td>
                   <td>{r.product || "—"}</td>
                   <td>{r.quantityKg} kg</td>
@@ -662,15 +652,12 @@ export function RFQs() {
                       <NavLink to={lotDetailsPath(r.lotId)} className="rfq-lot-link" title="Open linked lot">
                         {r.lotId}
                       </NavLink>
-                    ) : (
-                      "—"
-                    )}
+                    ) : "—"}
                   </td>
                   <td>
                     <span className={`rfq-pill rfq-pill--${r.status}`}>{statusLabel(r.status)}</span>
                   </td>
                   <td className="muted">{new Date(r.createdAt).toLocaleDateString()}</td>
-
                   <td className="rfq-actions-cell">
                     <div className="rfq-row-actions">
                       <NavLink
@@ -721,303 +708,67 @@ export function RFQs() {
         )}
       </section>
 
-      <section className="rfq-foot card card--soft">
-        <div className="rfq-foot__inner">
-          <div>
-            <div className="rfq-foot__label">Real flow</div>
-            <div className="rfq-foot__title">RFQ → Contracts/Escrow</div>
-            <div className="muted">
-              Create an RFQ, then use its UUID to initiate escrow. This prevents the “rfqId must be a UUID” error.
-            </div>
-          </div>
+      <style>{`
+        .rfq-page{ display:flex; flex-direction: column; gap: var(--space-5); }
+        .rfq-head{ display:flex; align-items:flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+        .rfq-subtitle{ margin: 0; }
+        .rfq-head__actions{ display:flex; gap: var(--space-2); flex-wrap: wrap; }
 
-          <div className="rfq-foot__actions">
-            <NavLink to={ROUTES.DASHBOARD.CONTRACTS} className="btn btn--soft">
-              Contracts & escrow
-            </NavLink>
-          </div>
-        </div>
-      </section>
+        .rfq-create{ display:flex; flex-direction: column; gap: var(--space-4); }
+        .rfq-create__head{ display:flex; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+        .rfq-create__label{ font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); margin-bottom: 2px; }
+        .rfq-create__title{ font-size: var(--fs-5); font-weight: var(--fw-semibold); margin-bottom: var(--space-1); }
+        .rfq-create__meta{ display:flex; gap: var(--space-2); flex-wrap: wrap; align-items: start; }
 
-      <style>
-        {`
-          .rfq-page{
-            display:flex;
-            flex-direction: column;
-            gap: var(--space-5);
-          }
+        .rfq-meta-box{ background: var(--color-elevated); border: var(--border-1); border-radius: var(--radius-1); padding: var(--space-3); min-width: 160px; }
+        .rfq-meta-box__label{ display:block; font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); margin-bottom: 2px; }
+        .rfq-meta-box__value{ font-size: var(--fs-3); font-weight: var(--fw-semibold); }
 
-          .rfq-head{
-            display:flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: var(--space-4);
-            flex-wrap: wrap;
-          }
+        .rfq-form{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-3); align-items: end; }
+        .rfq-label{ display:flex; flex-direction: column; gap: var(--space-2); font-size: var(--fs-2); }
+        .rfq-label--full{ grid-column: 1 / -1; }
+        .rfq-label textarea{ min-height: 110px; }
 
-          .rfq-subtitle{
-            margin: 0;
-          }
+        .rfq-alert{ grid-column: 1 / -1; padding: var(--space-3); border-radius: var(--radius-1); border: var(--border-1); font-size: var(--fs-2); }
+        .rfq-alert--error{ background: color-mix(in oklab, var(--color-danger) 10%, transparent); }
 
-          .rfq-head__actions{
-            display:flex;
-            gap: var(--space-2);
-            flex-wrap: wrap;
-          }
+        .rfq-form__actions{ grid-column: 1 / -1; display:flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-1); }
 
-          .rfq-create{
-            display:flex;
-            flex-direction: column;
-            gap: var(--space-4);
-          }
+        .rfq-filters__row{ display:grid; grid-template-columns: 1.2fr 0.5fr 0.6fr 1fr; gap: var(--space-4); align-items: end; }
 
-          .rfq-create__head{
-            display:flex;
-            justify-content: space-between;
-            gap: var(--space-4);
-            flex-wrap: wrap;
-          }
+        .rfq-meta{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+        .rfq-meta__item{ background: var(--color-elevated); border: var(--border-1); border-radius: var(--radius-1); padding: var(--space-3); }
+        .rfq-meta__label{ display:block; font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); margin-bottom: 2px; }
+        .rfq-meta__value{ font-size: var(--fs-3); font-weight: var(--fw-semibold); }
 
-          .rfq-create__label{
-            font-size: var(--fs-1);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--color-text-soft);
-            margin-bottom: 2px;
-          }
+        .rfq-table{ padding: 0; }
+        .rfq-state{ padding: var(--space-5); display:flex; align-items:center; gap: var(--space-3); flex-wrap: wrap; }
 
-          .rfq-create__title{
-            font-size: var(--fs-5);
-            font-weight: var(--fw-semibold);
-            margin-bottom: var(--space-1);
-          }
+        .rfq-code{ font-family: var(--font-mono); font-size: var(--fs-1); }
+        .rfq-lot-link{ font-size: var(--fs-1); font-family: var(--font-mono); }
 
-          .rfq-create__meta{
-            display:flex;
-            gap: var(--space-2);
-            flex-wrap: wrap;
-            align-items: start;
-          }
+        .rfq-pill{ display:inline-flex; align-items:center; padding: 3px 8px; border-radius: var(--radius-pill); border: var(--border-1); background: var(--color-surface); font-size: var(--fs-1); font-weight: var(--fw-medium); white-space: nowrap; }
+        .rfq-pill--draft{ background: color-mix(in oklab, var(--color-info) 8%, transparent); border-color: color-mix(in oklab, var(--color-info) 26%, transparent); }
+        .rfq-pill--sent{ background: color-mix(in oklab, var(--color-primary) 10%, transparent); border-color: color-mix(in oklab, var(--color-primary) 28%, transparent); }
+        .rfq-pill--answered{ background: color-mix(in oklab, var(--color-success) 10%, transparent); border-color: color-mix(in oklab, var(--color-success) 28%, transparent); }
+        .rfq-pill--closed{ opacity: 0.75; }
 
-          .rfq-meta-box{
-            background: var(--color-elevated);
-            border: var(--border-1);
-            border-radius: var(--radius-1);
-            padding: var(--space-3);
-            min-width: 160px;
-          }
+        .rfq-actions-cell{ width: 1%; white-space: nowrap; }
+        .rfq-row-actions{ display:flex; gap: 6px; }
+        .rfq-mini-btn{ height: 28px; padding: 0 8px; }
 
-          .rfq-meta-box__label{
-            display:block;
-            font-size: var(--fs-1);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--color-text-soft);
-            margin-bottom: 2px;
-          }
-
-          .rfq-meta-box__value{
-            font-size: var(--fs-3);
-            font-weight: var(--fw-semibold);
-          }
-
-          .rfq-form{
-            display:grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: var(--space-3);
-            align-items: end;
-          }
-
-          .rfq-label{
-            display:flex;
-            flex-direction: column;
-            gap: var(--space-2);
-            font-size: var(--fs-2);
-          }
-
-          .rfq-label--full{
-            grid-column: 1 / -1;
-          }
-
-          .rfq-label textarea{
-            min-height: 110px;
-          }
-
-          .rfq-alert{
-            grid-column: 1 / -1;
-            padding: var(--space-3);
-            border-radius: var(--radius-1);
-            border: var(--border-1);
-            font-size: var(--fs-2);
-          }
-
-          .rfq-alert--error{
-            background: color-mix(in oklab, var(--color-danger) 10%, transparent);
-          }
-
-          .rfq-form__actions{
-            grid-column: 1 / -1;
-            display:flex;
-            gap: var(--space-2);
-            flex-wrap: wrap;
-            margin-top: var(--space-1);
-          }
-
-          .rfq-filters__row{
-            display:grid;
-            grid-template-columns: 1.2fr 0.5fr 0.6fr 1fr;
-            gap: var(--space-4);
-            align-items: end;
-          }
-
-          .rfq-meta{
-            display:grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: var(--space-2);
-          }
-
-          .rfq-meta__item{
-            background: var(--color-elevated);
-            border: var(--border-1);
-            border-radius: var(--radius-1);
-            padding: var(--space-3);
-          }
-
-          .rfq-meta__label{
-            display:block;
-            font-size: var(--fs-1);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--color-text-soft);
-            margin-bottom: 2px;
-          }
-
-          .rfq-meta__value{
-            font-size: var(--fs-3);
-            font-weight: var(--fw-semibold);
-          }
-
-          .rfq-table{
-            padding: 0;
-          }
-
-          .rfq-state{
-            padding: var(--space-5);
-            display:flex;
-            align-items:center;
-            gap: var(--space-3);
-            flex-wrap: wrap;
-          }
-
-          .rfq-code{
-            font-family: var(--font-mono);
-            font-size: var(--fs-1);
-          }
-
-          .rfq-lot-link{
-            font-size: var(--fs-1);
-            font-family: var(--font-mono);
-          }
-
-          .rfq-pill{
-            display:inline-flex;
-            align-items:center;
-            padding: 3px 8px;
-            border-radius: var(--radius-pill);
-            border: var(--border-1);
-            background: var(--color-surface);
-            font-size: var(--fs-1);
-            font-weight: var(--fw-medium);
-            white-space: nowrap;
-          }
-
-          .rfq-pill--draft{
-            background: color-mix(in oklab, var(--color-info) 8%, transparent);
-            border-color: color-mix(in oklab, var(--color-info) 26%, transparent);
-          }
-
-          .rfq-pill--sent{
-            background: color-mix(in oklab, var(--color-primary) 10%, transparent);
-            border-color: color-mix(in oklab, var(--color-primary) 28%, transparent);
-          }
-
-          .rfq-pill--answered{
-            background: color-mix(in oklab, var(--color-success) 10%, transparent);
-            border-color: color-mix(in oklab, var(--color-success) 28%, transparent);
-          }
-
-          .rfq-pill--closed{
-            opacity: 0.75;
-          }
-
-          .rfq-actions-cell{
-            width: 1%;
-            white-space: nowrap;
-          }
-
-          .rfq-row-actions{
-            display:flex;
-            gap: 6px;
-          }
-
-          .rfq-mini-btn{
-            height: 28px;
-            padding: 0 8px;
-          }
-
-          .rfq-foot__inner{
-            display:flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: var(--space-4);
-            flex-wrap: wrap;
-          }
-
-          .rfq-foot__label{
-            font-size: var(--fs-1);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--color-text-soft);
-            margin-bottom: 2px;
-          }
-
-          .rfq-foot__title{
-            font-size: var(--fs-5);
-            font-weight: var(--fw-semibold);
-            margin-bottom: var(--space-1);
-          }
-
-          .rfq-foot__actions{
-            display:flex;
-            gap: var(--space-2);
-            flex-wrap: wrap;
-          }
-
-          @media (max-width: 1200px){
-            .rfq-filters__row{
-              grid-template-columns: 1fr 1fr;
-            }
-            .rfq-form{
-              grid-template-columns: 1fr 1fr;
-            }
-          }
-
-          @media (max-width: 980px){
-            .rfq-filters__row{
-              grid-template-columns: 1fr;
-            }
-            .rfq-form{
-              grid-template-columns: 1fr;
-            }
-          }
-
-          @media (max-width: 620px){
-            .rfq-meta{
-              grid-template-columns: 1fr;
-            }
-          }
-        `}
-      </style>
+        @media (max-width: 1200px){
+          .rfq-filters__row{ grid-template-columns: 1fr 1fr; }
+          .rfq-form{ grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 980px){
+          .rfq-filters__row{ grid-template-columns: 1fr; }
+          .rfq-form{ grid-template-columns: 1fr; }
+        }
+        @media (max-width: 620px){
+          .rfq-meta{ grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   );
 }
