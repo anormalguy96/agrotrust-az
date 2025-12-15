@@ -15,7 +15,7 @@ export const handler: Handler = async (event) => {
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .select("*")
-      .eq("id", userId)
+      .eq("app_user_id", userId)
       .maybeSingle();
 
     if (error) {
@@ -23,7 +23,7 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: "Failed to load profile", details: error.message }) };
     }
 
-    return { statusCode: 200, body: JSON.stringify({ profile: data ?? { id: userId } }) };
+    return { statusCode: 200, body: JSON.stringify({ profile: data ?? { app_user_id: userId } }) };
   } catch (err) {
     console.error("profile-me: unexpected error", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Unexpected error loading profile" }) };
