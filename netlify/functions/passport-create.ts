@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { supabaseAdmin } from "./supabaseClient";
 
 type ProductPayload = {
-  name: string;
+  name?: string;
   variety?: string;
   quantity?: number;
   unit?: string;
@@ -21,84 +21,169 @@ type RequestBody = {
   product?: ProductPayload;
   harvest?: HarvestPayload;
   certifications?: string[];
+  forceNew?: boolean;
 };
 
-function badRequest(message: string, field?: string) {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(statusCode: number, data: unknown) {
   return {
-    statusCode: 400,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      error: "VALIDATION_ERROR",
-      field,
-      message,
-    }),
+    statusCode,
+    headers: { "Content-Type": "application/json", ...corsHeaders },
+    body: JSON.stringify(data),
   };
 }
 
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === "string" && v.trim().length > 0;
+}
+
+function asStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x) => typeof x === "string").map((x) => x.trim()).filter(Boolean);
+}
+
+function toISODateOrNull(v: unknown): string | null {
+  if (!isNonEmptyString(v)) return null;
+  
+  const s = v.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+type LotRow = {
+  id: string;
+  cooperative_id: string | null;
+  product_name: string;
+  variety: string | null;
+  quantity_kg: number | null;
+  region: string | null;
+  harvest_date: string | null;
+  certifications: string[] | null;
+  passport_id: string | null;
+};
+
+type PassportRow = {
+  id: string;
+  lot_id: string;
+  cooperative_id: string | null;
+  product_name: string;
+  product_variety: string | null;
+  quantity_kg: number | null;
+  unit: string | null;
+  region: string | null;
+  harvest_date: string | null;
+  certifications: string[] | null;
+  qr_payload: string;
+  created_at: string | null;
+};
+
 export const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return {
-      statusCode: 405,
-      headers: { "Allow": "POST" },
-      body: "Method Not Allowed",
-    };
+  const method = event.httpMethod?.toUpperCase();
+
+  if (method === "OPTIONS") {
+    return { statusCode: 204, headers: corsHeaders, body: "" };
+  }
+
+  if (method !== "POST") {
+    return json(405, { error: "METHOD_NOT_ALLOWED", message: "Use POST." });
   }
 
   if (!event.body) {
-    return badRequest("Request body is required.");
+    return json(400, { error: "BAD_REQUEST", message: "Missing request body." });
   }
 
-  let payload: RequestBody;
+  let body: RequestBody;
   try {
-    payload = JSON.parse(event.body);
+    body = JSON.parse(event.body);
   } catch {
-    return badRequest("Invalid JSON body.");
+    return json(400, { error: "BAD_REQUEST", message: "Invalid JSON body." });
   }
 
-  const {
-    lotId,
-    cooperativeId,
-    product,
-    harvest,
-    certifications = [],
-  } = payload;
-
-  if (!lotId || typeof lotId !== "string") {
-    return badRequest("lotId is required.", "lotId");
+  const lotId = (body.lotId || "").trim();
+  if (!lotId) {
+    return json(400, { error: "VALIDATION_ERROR", field: "lotId", message: "lotId is required." });
   }
 
-  if (!product || typeof product !== "object") {
-    return badRequest("product is required.", "product");
+  const forceFromQuery = (event.queryStringParameters?.force || "").trim();
+  const forceNew = Boolean(body.forceNew) || forceFromQuery === "1" || forceFromQuery.toLowerCase() === "true";
+
+  const { data: lot, error: lotErr } = await supabaseAdmin
+    .from("lots")
+    .select(
+      "id, cooperative_id, product_name, variety, quantity_kg, region, harvest_date, certifications, passport_id"
+    )
+    .eq("id", lotId)
+    .single<LotRow>();
+
+  if (lotErr || !lot) {
+    return json(404, { error: "NOT_FOUND", message: "Lot not found." });
   }
 
-  if (!product.name || !product.name.trim()) {
-    return badRequest("product.name is required.", "product.name");
+  if (lot.passport_id && !forceNew) {
+    const { data: existing, error: pErr } = await supabaseAdmin
+      .from("passports")
+      .select("id, lot_id, qr_payload, created_at")
+      .eq("id", lot.passport_id)
+      .single<Pick<PassportRow, "id" | "lot_id" | "qr_payload" | "created_at">>();
+
+    if (!pErr && existing) {
+      return json(200, {
+        passportId: existing.id,
+        lotId: existing.lot_id,
+        qrPayload: existing.qr_payload,
+        createdAt: existing.created_at,
+        status: "linked",
+      });
+    }
   }
 
-  // Normalise data
-  const coopId = cooperativeId || null;
-  const quantity =
-    typeof product.quantity === "number" ? product.quantity : null;
-  const unit = product.unit || "kg";
+  const productName = (body.product?.name ?? lot.product_name ?? "").trim();
+  if (!productName) {
+    return json(400, {
+      error: "VALIDATION_ERROR",
+      field: "product.name",
+      message: "Product name is missing (from payload and lot).",
+    });
+  }
 
-  const region = harvest?.region ?? null;
-  const harvestDate = harvest?.harvestDate ?? null;
+  const variety = (body.product?.variety ?? lot.variety ?? "").trim() || null;
 
-  const certs = Array.isArray(certifications)
-    ? certifications.filter((c) => typeof c === "string")
-    : [];
+  const quantityKg =
+    typeof body.product?.quantity === "number" && Number.isFinite(body.product.quantity)
+      ? body.product.quantity
+      : lot.quantity_kg ?? null;
 
-  // Generate a stable passport ID + QR payload
+  const unit = (body.product?.unit ?? "kg").trim() || "kg";
+
+  const region = (body.harvest?.region ?? lot.region ?? "").trim() || null;
+  const harvestDate = toISODateOrNull(body.harvest?.harvestDate) ?? lot.harvest_date ?? null;
+
+  const certs =
+    body.certifications != null
+      ? asStringArray(body.certifications)
+      : Array.isArray(lot.certifications)
+      ? lot.certifications
+      : [];
+
+  const coopId =
+    (lot.cooperative_id && lot.cooperative_id.trim()) ||
+    (body.cooperativeId && body.cooperativeId.trim()) ||
+    null;
+
   const passportId = crypto.randomUUID();
 
   const qrPayloadObject = {
     passportId,
-    lotId,
+    lotId: lot.id,
     cooperativeId: coopId,
     product: {
-      name: product.name,
-      variety: product.variety ?? null,
-      quantity,
+      name: productName,
+      variety,
+      quantityKg,
       unit,
     },
     harvest: {
@@ -106,18 +191,19 @@ export const handler: Handler = async (event) => {
       harvestDate,
     },
     certifications: certs,
+    createdAt: new Date().toISOString(),
+    source: "db",
   };
 
   const qrPayload = JSON.stringify(qrPayloadObject);
 
-  // Persist to Supabase
-  const { error } = await supabaseAdmin.from("passports").insert({
+  const { error: insertErr } = await supabaseAdmin.from("passports").insert({
     id: passportId,
-    lot_id: lotId,
+    lot_id: lot.id,
     cooperative_id: coopId,
-    product_name: product.name,
-    product_variety: product.variety ?? null,
-    quantity_kg: quantity,
+    product_name: productName,
+    product_variety: variety,
+    quantity_kg: quantityKg,
     unit,
     region,
     harvest_date: harvestDate,
@@ -125,29 +211,31 @@ export const handler: Handler = async (event) => {
     qr_payload: qrPayload,
   });
 
-  if (error) {
-    console.error("Supabase insert error (passports):", error);
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        error: "DB_ERROR",
-        message: error.message,
-      }),
-    };
+  if (insertErr) {
+    return json(500, { error: "DB_ERROR", message: insertErr.message });
   }
 
-  const responseBody = {
-    passportId,
-    lotId,
-    qrPayload,
-    createdAt: new Date().toISOString(),
-    status: "created" as const,
-  };
+  const { error: updErr } = await supabaseAdmin
+    .from("lots")
+    .update({ passport_id: passportId })
+    .eq("id", lot.id);
 
-  return {
-    statusCode: 200,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(responseBody),
-  };
+  if (updErr) {
+    return json(200, {
+      passportId,
+      lotId: lot.id,
+      qrPayload,
+      createdAt: qrPayloadObject.createdAt,
+      status: "created_but_lot_not_linked",
+      warning: updErr.message,
+    });
+  }
+
+  return json(201, {
+    passportId,
+    lotId: lot.id,
+    qrPayload,
+    createdAt: qrPayloadObject.createdAt,
+    status: "created",
+  });
 };
