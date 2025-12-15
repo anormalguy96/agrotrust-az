@@ -3,48 +3,11 @@ import { supabaseAdmin } from "./supabaseClient";
 
 type RFQStatus = "draft" | "sent" | "answered" | "closed";
 
-type DbRfq = {
-  id: string;
-  created_at: string | null;
-  status: RFQStatus | string;
-
-  buyer_id: string | null;
-  cooperative_id: string | null;
-  lot_id: string | null;
-
-  product_name: string;
-  quantity_kg: number | string;
-  target_price_per_kg: number | string | null;
-  region_preference: string | null;
-
-  preferred_certifications: string[] | null;
-  notes: string | null;
-
-  created_by: string | null;
-};
-
-type RfqListRow = {
-  id: string;
-  created_at: string;
-  status: RFQStatus;
-
-  buyer_id: string | null;
-  cooperative_id: string | null;
-  lot_id: string | null;
-
-  product_name: string;
-  quantity_kg: number;
-  target_price_per_kg: number | null;
-  region_preference: string | null;
-
-  preferred_certifications: string[] | null;
-  notes: string | null;
-};
-
 function toStatus(v: unknown): RFQStatus {
-  const s = String(v || "").toLowerCase().trim();
-  if (s === "draft" || s === "sent" || s === "answered" || s === "closed") return s;
-  return "draft";
+  const s = String(v ?? "").toLowerCase().trim();
+  return s === "draft" || s === "sent" || s === "answered" || s === "closed"
+    ? (s as RFQStatus)
+    : "draft";
 }
 
 function toNumber(v: unknown): number {
@@ -58,19 +21,35 @@ export const handler: Handler = async (event) => {
       return {
         statusCode: 405,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: "Method not allowed" })
+        body: JSON.stringify({ error: "Method not allowed" }),
       };
     }
 
     const params = event.queryStringParameters ?? {};
-    const role = (params.role ?? "").toLowerCase();
-    const userId = (params.userId ?? "").trim();
-    const status = (params.status ?? "").toLowerCase();
+    const role = String(params.role ?? "").toLowerCase();
+    const userId = String(params.userId ?? "").trim();
+    const status = String(params.status ?? "").toLowerCase();
 
     let q = supabaseAdmin
       .from("rfqs")
       .select(
-        "id,created_at,status,buyer_id,cooperative_id,lot_id,product_name,quantity_kg,target_price_per_kg,region_preference,preferred_certifications,notes,created_by"
+        [
+          "id",
+          "created_at",
+          "status",
+          "buyer_id",
+          "buyer_name",
+          "cooperative_id",
+          "lot_id",
+          "product",
+          "product_name",
+          "quantity_kg",
+          "target_price_per_kg",
+          "region_preference",
+          "preferred_certifications",
+          "notes",
+          "created_by",
+        ].join(",")
       )
       .order("created_at", { ascending: false });
 
@@ -90,45 +69,49 @@ export const handler: Handler = async (event) => {
     const { data, error } = await q;
 
     if (error) {
-      console.error("rfqs-list supabase error:", error);
+      console.error("rfq-list supabase error:", error);
       return {
         statusCode: 500,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: "DB_ERROR", message: error.message })
+        body: JSON.stringify({ error: "DB_ERROR", message: error.message }),
       };
     }
 
-    const rows = (data ?? []) as DbRfq[];
+    const rows = (data ?? []) as any[];
 
-    const out: RfqListRow[] = rows.map((r) => ({
-      id: r.id,
+    const out = rows.map((r) => ({
+      id: String(r.id ?? ""),
       created_at: r.created_at ?? new Date().toISOString(),
       status: toStatus(r.status),
 
-      buyer_id: r.buyer_id,
-      cooperative_id: r.cooperative_id,
-      lot_id: r.lot_id,
+      buyer_id: r.buyer_id ?? null,
+      buyer_name: r.buyer_name ?? null,
 
-      product_name: r.product_name,
+      cooperative_id: r.cooperative_id ?? null,
+      lot_id: r.lot_id ?? null,
+
+      product: (r.product ?? r.product_name ?? "").toString(),
+      product_name: (r.product_name ?? r.product ?? "").toString(),
+
       quantity_kg: toNumber(r.quantity_kg),
       target_price_per_kg: r.target_price_per_kg === null ? null : toNumber(r.target_price_per_kg),
-      region_preference: r.region_preference,
+      region_preference: r.region_preference ?? null,
 
-      preferred_certifications: r.preferred_certifications ?? [],
-      notes: r.notes
+      preferred_certifications: Array.isArray(r.preferred_certifications) ? r.preferred_certifications : [],
+      notes: r.notes ?? null,
     }));
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(out)
+      body: JSON.stringify(out),
     };
   } catch (err) {
-    console.error("rfqs-list unexpected error:", err);
+    console.error("rfq-list unexpected error:", err);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "Unexpected error listing RFQs" })
+      body: JSON.stringify({ error: "Unexpected error listing RFQs" }),
     };
   }
 };
