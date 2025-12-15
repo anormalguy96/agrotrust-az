@@ -1,213 +1,359 @@
-import React, { useMemo, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
-import { Elements, CardElement, useElements, useStripe } from "@stripe/react-stripe-js";
-import { supabase } from "@/lib/supabaseClient";
+// src/pages/dashboard/EscrowInit.tsx
+// Real UI for:
+// - creating an escrow (DB + Stripe Checkout redirect)
+// - syncing after Stripe redirect
+// - releasing/cancelling escrow after inspection (server does real Stripe capture/cancel)
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { NavLink, useSearchParams } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
 
-type InitResponse = {
-  escrowId: string;
-  paymentIntentId: string;
-  clientSecret: string;
+import { ROUTES } from "@/app/config/routes";
+import { useAuth } from "@/hooks/useAuth";
+
+type EscrowRow = {
+  id: string;
+  rfq_id: string;
+  lot_id: string | null;
+  buyer_id: string;
+  cooperative_id: string;
+  amount: number;
+  currency: string;
+  status:
+    | "awaiting_payment"
+    | "authorized"
+    | "released"
+    | "cancelled"
+    | "refunded"
+    | "failed";
+  payment_provider: string;
+  payment_intent_id: string | null;
+  client_reference: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-function PayBox({
-  clientSecret,
-  escrowId,
-}: {
-  clientSecret: string;
-  escrowId: string;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+type InitResponse = {
+  ok: boolean;
+  escrow: EscrowRow;
+  checkout: { url: string; sessionId: string; paymentIntentId: string | null };
+};
 
-  async function onConfirm() {
-    setMessage(null);
-    if (!stripe || !elements) return;
+type SyncResponse = {
+  ok: boolean;
+  escrow: EscrowRow;
+};
 
-    const card = elements.getElement(CardElement);
-    if (!card) return;
+type ReleaseResponse = {
+  ok: boolean;
+  escrow: EscrowRow;
+};
 
-    setBusy(true);
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      const email = session.session?.user?.email ?? undefined;
-
-      const res = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card,
-          billing_details: { email },
-        },
-      });
-
-      if (res.error) {
-        setMessage(res.error.message || "Payment authorization failed. Please try again.");
-        return;
-      }
-
-      setMessage(
-        "✅ Funds authorized (held). Next: an admin/inspector must approve the deal, then the platform will release the escrow."
-      );
-    } finally {
-      setBusy(false);
-    }
+function safeJsonParse<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
   }
-
-  return (
-    <div style={{ marginTop: 16, padding: 16, border: "1px solid #333", borderRadius: 12 }}>
-      <h3 style={{ margin: 0, marginBottom: 8 }}>Step 2 — Authorize Payment</h3>
-      <p style={{ marginTop: 0, opacity: 0.85 }}>
-        Your payment will be <b>authorized</b> and held. It will only be captured when the escrow is released.
-      </p>
-
-      <div style={{ padding: 12, border: "1px solid #444", borderRadius: 10 }}>
-        <CardElement options={{ hidePostalCode: true }} />
-      </div>
-
-      <button
-        onClick={onConfirm}
-        disabled={!stripe || busy}
-        style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, cursor: "pointer" }}
-      >
-        {busy ? "Authorizing..." : "Authorize funds"}
-      </button>
-
-      <div style={{ marginTop: 10, opacity: 0.9 }}>
-        <small>Escrow ID: {escrowId}</small>
-      </div>
-
-      {message && (
-        <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: "1px solid #2a6" }}>
-          {message}
-        </div>
-      )}
-    </div>
-  );
 }
 
-export default function EscrowInit() {
-  const [rfqId, setRfqId] = useState("");
-  const [amount, setAmount] = useState<number>(0);
-  const [currency, setCurrency] = useState("usd");
+function getStoredUser(): any | null {
+  // Your app has shown both keys in Local Storage screenshots
+  const keys = ["agrotrust.auth.user", "agrotrust_user"];
+  for (const k of keys) {
+    const raw = localStorage.getItem(k);
+    if (!raw) continue;
+    const parsed = safeJsonParse<any>(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  }
+  return null;
+}
 
-  const [init, setInit] = useState<InitResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function EscrowInit() {
+  const [sp] = useSearchParams();
+  const auth = useAuth() as any;
 
-  const elementsOptions = useMemo(() => {
-    if (!init?.clientSecret) return undefined;
-    return { clientSecret: init.clientSecret };
-  }, [init?.clientSecret]);
+  const user = auth?.user ?? getStoredUser();
 
-  async function onInitEscrow() {
-    setError(null);
-    setInit(null);
+  const escrowIdFromUrl = sp.get("escrowId") || "";
+  const resultFromUrl = (sp.get("result") || "").toLowerCase(); // success | cancel
 
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      setError("You must be signed in to initialize escrow.");
-      return;
-    }
+  const rfqIdFromUrl = sp.get("rfqId") || "";
+  const lotIdFromUrl = sp.get("lotId") || "";
+  const coopIdFromUrl = sp.get("cooperativeId") || "";
+  const amountFromUrl = sp.get("amount") || "";
+  const currencyFromUrl = (sp.get("currency") || "usd").toLowerCase();
 
-    if (!rfqId.trim()) {
-      setError("Please enter a valid RFQ ID.");
-      return;
-    }
+  const [rfqId, setRfqId] = useState(rfqIdFromUrl);
+  const [lotId, setLotId] = useState(lotIdFromUrl);
+  const [cooperativeId, setCooperativeId] = useState(coopIdFromUrl);
+  const [amount, setAmount] = useState(amountFromUrl);
+  const [currency, setCurrency] = useState(currencyFromUrl);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Amount must be greater than 0.");
-      return;
-    }
+  const [escrow, setEscrow] = useState<EscrowRow | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-    setBusy(true);
-    try {
-      const res = await fetch("/.netlify/functions/escrow-init", {
+  const buyerId = useMemo(() => {
+    return user?.id || "";
+  }, [user?.id]);
+
+  const canCreate =
+    Boolean(buyerId) &&
+    rfqId.trim().length > 0 &&
+    cooperativeId.trim().length > 0 &&
+    Number(amount) > 0;
+
+  // Sync after Stripe redirects back to this page
+  useEffect(() => {
+    if (!escrowIdFromUrl) return;
+
+    const shouldSync = resultFromUrl === "success" || resultFromUrl === "cancel";
+    if (!shouldSync) return;
+
+    (async () => {
+      setMsg("Syncing escrow status…");
+      try {
+        const res = await fetch(
+          `/api/escrow/init?escrowId=${encodeURIComponent(escrowIdFromUrl)}&sync=1&result=${encodeURIComponent(
+            resultFromUrl
+          )}`
+        );
+        const text = await res.text().catch(() => "");
+        const data = safeJsonParse<SyncResponse>(text);
+
+        if (!res.ok || !data?.ok) {
+          throw new Error(text || "Failed to sync escrow.");
+        }
+
+        setEscrow(data.escrow);
+
+        if (resultFromUrl === "success") {
+          setMsg("Payment completed. Escrow should now be authorized (requires_capture).");
+        } else if (resultFromUrl === "cancel") {
+          setMsg("Payment was cancelled.");
+        } else {
+          setMsg(null);
+        }
+      } catch (e) {
+        setMsg(e instanceof Error ? e.message : "Failed to sync escrow.");
+      }
+    })();
+  }, [escrowIdFromUrl, resultFromUrl]);
+
+  const initMutation = useMutation<InitResponse, Error>({
+    mutationFn: async () => {
+      setMsg(null);
+
+      const payload = {
+        rfqId: rfqId.trim(),
+        lotId: lotId.trim() || undefined,
+        buyerId: buyerId.trim(),
+        cooperativeId: cooperativeId.trim(),
+        amount: Number(amount),
+        currency: currency.trim() || "usd",
+        memo: "Escrow initialized via dashboard UI",
+      };
+
+      const res = await fetch("/api/escrow/init", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ rfqId: rfqId.trim(), amount, currency }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json?.error || "Failed to initialize escrow.");
-        return;
+      const text = await res.text().catch(() => "");
+      const data = safeJsonParse<InitResponse>(text);
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(text || "Escrow init failed.");
       }
 
-      setInit(json as InitResponse);
-    } catch {
-      setError("Network error while initializing escrow.");
-    } finally {
-      setBusy(false);
+      return data;
+    },
+    onSuccess: (data) => {
+      setEscrow(data.escrow);
+      setMsg("Redirecting to Stripe Checkout…");
+      window.location.href = data.checkout.url; // real redirect
+    },
+    onError: (e) => {
+      setMsg(e.message);
+    },
+  });
+
+  const [inspectionResult, setInspectionResult] = useState<"PASS" | "FAIL">("PASS");
+  const [notes, setNotes] = useState("");
+
+  const releaseMutation = useMutation<ReleaseResponse, Error>({
+    mutationFn: async () => {
+      if (!escrow?.id) throw new Error("No escrow loaded.");
+
+      const res = await fetch("/api/escrow/release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          escrowId: escrow.id,
+          inspectionResult,
+          // inspectorId optional: if you have an inspector/admin user id, pass it here
+          notes: notes.trim() || undefined,
+        }),
+      });
+
+      const text = await res.text().catch(() => "");
+      const data = safeJsonParse<ReleaseResponse>(text);
+
+      if (!res.ok || !data?.ok) {
+        throw new Error(text || "Escrow release failed.");
+      }
+
+      return data;
+    },
+    onSuccess: (data) => {
+      setEscrow(data.escrow);
+      setMsg(
+        data.escrow.status === "released"
+          ? "Funds captured and released to cooperative (Stripe capture succeeded)."
+          : "Escrow cancelled after failed inspection (Stripe authorization cancelled)."
+      );
+    },
+    onError: (e) => setMsg(e.message),
+  });
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+
+    if (!buyerId) {
+      setMsg("You must be signed in (buyerId missing).");
+      return;
     }
+    if (!rfqId.trim()) return setMsg("RFQ ID is required.");
+    if (!cooperativeId.trim()) return setMsg("Cooperative ID is required.");
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      return setMsg("Amount must be a positive number.");
+    }
+
+    initMutation.mutate();
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 820 }}>
-      <h1 style={{ marginTop: 0 }}>Initialize Escrow</h1>
-      <p style={{ opacity: 0.85 }}>
-        This is a real escrow-like flow: the buyer authorizes funds, then an admin releases the payment after verification.
-      </p>
+    <div className="card" style={{ maxWidth: 860 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div>
+          <h1 className="dash-title">Escrow initialization</h1>
+          <p className="muted">
+            Real flow: create escrow → pay on Stripe Checkout (manual capture) → sync status → PASS captures / FAIL cancels.
+          </p>
+        </div>
 
-      <div style={{ padding: 16, border: "1px solid #333", borderRadius: 12 }}>
-        <h3 style={{ margin: 0, marginBottom: 8 }}>Step 1 — Create Escrow Hold</h3>
-
-        <label style={{ display: "block", marginTop: 10 }}>RFQ ID</label>
-        <input
-          value={rfqId}
-          onChange={(e) => setRfqId(e.target.value)}
-          placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #444" }}
-        />
-
-        <label style={{ display: "block", marginTop: 10 }}>Amount (total)</label>
-        <input
-          type="number"
-          value={amount || ""}
-          onChange={(e) => setAmount(Number(e.target.value))}
-          placeholder="e.g. 2500"
-          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #444" }}
-        />
-
-        <label style={{ display: "block", marginTop: 10 }}>Currency</label>
-        <input
-          value={currency}
-          onChange={(e) => setCurrency(e.target.value.toLowerCase())}
-          placeholder="usd"
-          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #444" }}
-        />
-
-        <button
-          onClick={onInitEscrow}
-          disabled={busy}
-          style={{ marginTop: 14, padding: "10px 14px", borderRadius: 10, cursor: "pointer" }}
-        >
-          {busy ? "Initializing..." : "Initialize escrow"}
-        </button>
-
-        {error && (
-          <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: "1px solid #a33" }}>
-            {error}
-          </div>
-        )}
+        <NavLink to={ROUTES.DASHBOARD.CONTRACTS} className="btn btn--ghost">
+          Back
+        </NavLink>
       </div>
 
-      {init && elementsOptions && (
-        <Elements stripe={stripePromise} options={elementsOptions}>
-          <PayBox clientSecret={init.clientSecret} escrowId={init.escrowId} />
-        </Elements>
+      {!buyerId && (
+        <div className="rfq-alert rfq-alert--error" style={{ marginTop: 16 }}>
+          You must be signed in. (Your UI shows a user, but this page didn’t receive a user object.)
+          <div style={{ marginTop: 10 }}>
+            <NavLink to={ROUTES.AUTH.SIGN_IN} className="btn btn--primary">Sign in</NavLink>
+          </div>
+        </div>
       )}
 
-      <div style={{ marginTop: 18, opacity: 0.8 }}>
-        <small>
-          Tip: after authorization, the escrow status is updated by Stripe webhook to <b>authorized</b>. Then an admin can
-          call <code>/.netlify/functions/escrow-release</code> to capture and release funds.
-        </small>
+      <form onSubmit={onSubmit} className="stack stack--md" style={{ marginTop: 16 }}>
+        <label className="form-label">
+          Buyer ID (from your login)
+          <input className="input" value={buyerId} readOnly />
+        </label>
+
+        <label className="form-label">
+          RFQ ID (UUID)
+          <input className="input" value={rfqId} onChange={(e) => setRfqId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+        </label>
+
+        <label className="form-label">
+          Lot ID (optional)
+          <input className="input" value={lotId} onChange={(e) => setLotId(e.target.value)} placeholder="lot-abcdef12" />
+        </label>
+
+        <label className="form-label">
+          Cooperative ID (UUID)
+          <input className="input" value={cooperativeId} onChange={(e) => setCooperativeId(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+        </label>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 0.6fr", gap: 12 }}>
+          <label className="form-label">
+            Amount
+            <input className="input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1000" />
+          </label>
+
+          <label className="form-label">
+            Currency
+            <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              <option value="usd">USD</option>
+              <option value="eur">EUR</option>
+              <option value="gbp">GBP</option>
+            </select>
+          </label>
+        </div>
+
+        <button className="btn btn--primary" type="submit" disabled={!canCreate || initMutation.isPending}>
+          {initMutation.isPending ? "Creating…" : "Start payment (Stripe Checkout)"}
+        </button>
+      </form>
+
+      {msg && <div className="rfq-alert" style={{ marginTop: 14 }}>{msg}</div>}
+
+      <div style={{ marginTop: 18 }}>
+        <div className="aside-label">Current escrow</div>
+        {!escrow && (
+          <p className="muted">
+            No escrow loaded yet. After payment, you’ll return here and the page will auto-sync using the escrowId in the URL.
+          </p>
+        )}
+
+        {escrow && (
+          <div className="card card--soft" style={{ marginTop: 10 }}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <div><strong>Escrow ID:</strong> <code>{escrow.id}</code></div>
+              <div><strong>Status:</strong> <code>{escrow.status}</code></div>
+              <div><strong>Amount:</strong> {escrow.amount} {escrow.currency.toUpperCase()}</div>
+              <div><strong>PaymentIntent:</strong> <code>{escrow.payment_intent_id ?? "—"}</code></div>
+              <div><strong>Checkout session:</strong> <code>{escrow.client_reference ?? "—"}</code></div>
+            </div>
+
+            <hr style={{ margin: "14px 0", opacity: 0.4 }} />
+
+            <div className="aside-label">Inspection outcome (real capture/cancel)</div>
+            <p className="muted" style={{ marginTop: 6 }}>
+              Only do this after the escrow is <code>authorized</code> (Stripe PaymentIntent should be <code>requires_capture</code>).
+            </p>
+
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="radio" checked={inspectionResult === "PASS"} onChange={() => setInspectionResult("PASS")} />
+                PASS (capture funds)
+              </label>
+              <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="radio" checked={inspectionResult === "FAIL"} onChange={() => setInspectionResult("FAIL")} />
+                FAIL (cancel authorization)
+              </label>
+            </div>
+
+            <label className="form-label" style={{ marginTop: 10 }}>
+              Notes (optional)
+              <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Inspector notes…" />
+            </label>
+
+            <button
+              className="btn btn--primary"
+              style={{ marginTop: 10 }}
+              disabled={!escrow || releaseMutation.isPending}
+              onClick={() => releaseMutation.mutate()}
+              type="button"
+            >
+              {releaseMutation.isPending ? "Submitting…" : "Submit inspection & release/cancel"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
