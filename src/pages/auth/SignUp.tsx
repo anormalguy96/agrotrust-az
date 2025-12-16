@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import { BRAND } from "@/app/config/constants";
@@ -7,6 +7,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabaseClient";
 
 type UserRole = "cooperative" | "buyer" | "admin";
+
+function digitsOnly(v: string) {
+  return (v || "").replace(/[^\d]/g, "");
+}
 
 export function SignUp() {
   const navigate = useNavigate();
@@ -18,6 +22,7 @@ export function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Keep phone optional here; full country/city selection lives in Settings (CSC UI)
   const [phoneCountry, setPhoneCountry] = useState("+994");
   const [phoneNumber, setPhoneNumber] = useState("");
 
@@ -30,13 +35,16 @@ export function SignUp() {
     }
   }, [isAuthenticated, navigate]);
 
-  const canSubmit =
-    name.trim().length > 0 &&
-    email.trim().length > 0 &&
-    password.trim().length >= 6 &&
-    !busy;
+  const canSubmit = useMemo(() => {
+    return (
+      name.trim().length > 0 &&
+      email.trim().length > 0 &&
+      password.trim().length >= 6 &&
+      !busy
+    );
+  }, [name, email, password, busy]);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
@@ -48,54 +56,73 @@ export function SignUp() {
     if (!cleanedEmail) return setError("Please enter your email.");
     if (cleanedPassword.length < 6) return setError("Password must be at least 6 characters.");
 
-    const [firstName, ...rest] = cleanedName.split(" ");
+    const [firstName, ...rest] = cleanedName.split(" ").filter(Boolean);
     const lastName = rest.join(" ") || firstName;
 
     setBusy(true);
     try {
-      // 1) Supabase Auth signUp (REAL)
+      // 1) Supabase Auth signUp
       const { data, error: signErr } = await supabase.auth.signUp({
         email: cleanedEmail,
         password: cleanedPassword,
         options: {
+          // Keep metadata light. Profile fields go to `profiles` via Netlify Function.
           data: {
             first_name: firstName,
             last_name: lastName,
-            role, // keep for reference
-            organisation: organisation.trim() || null,
-            phone_country: phoneCountry || null,
-            phone_number: phoneNumber || null,
+            role,
           },
         },
       });
 
       if (signErr) throw new Error(signErr.message);
 
-      // 2) Ensure public.profiles row exists (server-side, service role)
-      // We pass the userId if we have it; otherwise function will lookup by email.
-      const userId = data.user?.id ?? null;
+      // Supabase returns a user id even when email confirmation is required.
+      const appUserId = String(data.user?.id ?? "").trim();
 
-      const res = await fetch("/.netlify/functions/profiles-upsert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          email: cleanedEmail,
-          firstName,
-          lastName,
-          role, // cooperative | buyer | admin
-        }),
-      });
+      // 2) Initialize / upsert profile row (server-side, service role)
+      // IMPORTANT: We write by `app_user_id` (text), NOT by `profiles.id` (uuid).
+      // This works for both UUID ids and demo ids like "user-xxxx".
+      if (appUserId) {
+        const calling = digitsOnly(phoneCountry);
+        const national = digitsOnly(phoneNumber);
 
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error || "Profile initialization failed.");
+        const res = await fetch("/.netlify/functions/profile-update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            userId: appUserId, // <-- becomes profiles.app_user_id
+            fullName: cleanedName,
+            companyName: organisation.trim() || null,
+            phoneCountryCallingCode: calling || null,
+            phoneNational: national || null,
+          }),
+        });
 
-      // 3) If your Supabase project requires email confirmation,
-      // the session will be null until the user clicks the email link.
-      // Send them to Sign In with a friendly hint.
+        // Don’t block account creation if profile init fails; Settings can still work.
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          let msg = "Profile initialization failed.";
+          try {
+            const j = JSON.parse(text || "{}");
+            msg = j?.details || j?.error || msg;
+          } catch {
+            if (text) msg = text;
+          }
+          // For MVP, show a warning but still send user to sign-in.
+          console.warn("profile-update failed:", msg);
+        }
+      }
+
+      // 3) Send user to Sign In (email confirmation may be required)
       navigate(ROUTES.AUTH.SIGN_IN, {
         replace: true,
-        state: { from: { pathname: ROUTES.DASHBOARD.OVERVIEW } },
+        state: {
+          from: { pathname: ROUTES.DASHBOARD.OVERVIEW },
+          justSignedUp: true,
+          email: cleanedEmail,
+        },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-up failed. Please try again.");
@@ -111,7 +138,7 @@ export function SignUp() {
           <p className="auth-kicker">Create your account</p>
           <h1 className="auth-title">Join {BRAND.productName}</h1>
           <p className="muted auth-subtitle">
-            This uses real Supabase authentication. You may need to confirm your email before signing in.
+            Sign-up uses Supabase authentication. You may need to confirm your email before signing in.
           </p>
 
           <form onSubmit={handleSubmit} className="auth-form">
@@ -179,6 +206,7 @@ export function SignUp() {
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="50 123 45 67"
+                  inputMode="tel"
                 />
               </div>
             </label>
@@ -208,7 +236,7 @@ export function SignUp() {
             </div>
 
             <div className="auth-foot muted">
-              If email confirmation is enabled, check your inbox and confirm before signing in.
+              After sign-up, set your country/city/phone precisely in Settings.
             </div>
           </form>
         </div>
