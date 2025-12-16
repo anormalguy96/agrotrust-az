@@ -256,6 +256,8 @@ export function RFQs() {
   const { user, getRoleLabel } = useAuth() as any;
   const queryClient = useQueryClient();
 
+  const userId = String(user?.id ?? "").trim();
+
   const rawRole = (user?.role || "").toLowerCase();
   const role = rawRole === "coop" ? "cooperative" : rawRole;
 
@@ -281,8 +283,7 @@ export function RFQs() {
   const rfqsQuery = useQuery({
     queryKey: ["rfqs", role, userId],
     queryFn: () => fetchRfqs({ role, userId }),
-    // ✅ avoid running before auth loads for non-admin roles
-    enabled: Boolean(role) && (isAdmin || Boolean(userId)),
+    enabled: !!role && (role === "admin" || !!userId),
   });
 
   const rfqs = rfqsQuery.data ?? [];
