@@ -211,16 +211,14 @@ export function Settings() {
           userId,
           fullName: fullName.trim() || null,
           companyName: companyName.trim() || null,
-
+        
           countryIso2: countryIso2 || null,
           country: selectedCountry?.name ?? null,
-
+          city: cityQuery.trim() || null,
+        
           phoneCountryCallingCode: callingCode || null,
           phoneNational: phoneNational.trim() ? digitsOnly(phoneNational) : null,
-
-          // City intentionally NOT persisted
-          // city: cityQuery.trim() || null,
-        }),
+        })
       });
 
       const text = await res.text().catch(() => "");
