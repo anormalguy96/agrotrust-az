@@ -1,12 +1,11 @@
 import type { Handler } from "@netlify/functions";
 import { supabaseAdmin } from "./supabaseClient";
 
-const uuidRe =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isUuid(v: unknown): v is string {
-  return typeof v === "string" && uuidRe.test(v.trim());
-}
+const json = (statusCode: number, body: unknown) => ({
+  statusCode,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
 
 function digitsOnly(v: string) {
   return (v || "").replace(/[^\d]/g, "");
@@ -15,10 +14,10 @@ function digitsOnly(v: string) {
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
-      return { statusCode: 405, body: JSON.stringify({ error: "Method not allowed" }) };
+      return json(405, { error: "Method not allowed" });
     }
     if (!event.body) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing request body" }) };
+      return json(400, { error: "Missing request body" });
     }
 
     const payload = JSON.parse(event.body) as {
@@ -36,21 +35,18 @@ export const handler: Handler = async (event) => {
       phoneE164?: string | null;
     };
 
-    const userId = (payload.userId ?? "").trim();
-    if (!isUuid(userId)) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing/invalid userId" }) };
+    const userId = String(payload.userId ?? "").trim();
+    if (!userId) {
+      return json(400, { error: "Missing userId" });
     }
 
-    const iso2 = (payload.countryIso2 ?? "").trim().toUpperCase();
+    const iso2 = String(payload.countryIso2 ?? "").trim().toUpperCase();
     const calling = digitsOnly(String(payload.phoneCountryCallingCode ?? ""));
     const national = digitsOnly(String(payload.phoneNational ?? ""));
 
-    const computedE164 =
-      calling && national ? `+${calling}${national}` : null;
+    const computedE164 = calling && national ? `+${calling}${national}` : null;
 
     const row = {
-      id: userId,
-
       app_user_id: userId,
 
       full_name: payload.fullName ?? null,
@@ -68,22 +64,24 @@ export const handler: Handler = async (event) => {
 
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .upsert(row, { onConflict: "id" })
+      .upsert(row, { onConflict: "app_user_id" })
       .select("*")
       .single();
 
     if (error) {
       console.error("profile-update: supabase error", error);
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "Failed to update profile", details: error.message }),
-      };
+      return json(500, {
+        error: "Failed to update profile",
+        details: error.message,
+      });
     }
 
-    return { statusCode: 200, body: JSON.stringify({ profile: data }) };
-  } catch (err) {
+    return json(200, { profile: data });
+  } catch (err: any) {
     console.error("profile-update: unexpected error", err);
-    return { statusCode: 500, body: JSON.stringify({ error: "Unexpected error updating profile" }) };
+    return json(500, {
+      error: "Unexpected error updating profile",
+      details: err?.message ?? String(err),
+    });
   }
 };
-
