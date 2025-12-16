@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
 
+Disallow: /dashboard/
+Disallow: /auth/
+
 Sitemap: https://agrotrust-az.netlify.app/sitemap.xml
