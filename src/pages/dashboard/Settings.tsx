@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { City, Country } from "country-state-city";
 
@@ -77,8 +77,8 @@ export function Settings() {
   const [fullName, setFullName] = useState("");
   const [companyName, setCompanyName] = useState("");
 
+  // Country list
   const countries = useMemo(() => {
-    // returns { name, isoCode, phonecode, ... }
     const all = Country.getAllCountries();
     return all.sort((a, b) => a.name.localeCompare(b.name));
   }, []);
@@ -96,12 +96,15 @@ export function Settings() {
 
   const [phoneNational, setPhoneNational] = useState<string>("");
 
+  // City is UI-only. We DO NOT load it from DB.
   const [cityQuery, setCityQuery] = useState<string>("");
+
+  // Prevent country-change effect from wiping city during initial profile load
+  const didInitProfileRef = useRef(false);
 
   const cities = useMemo(() => {
     if (!countryIso2) return [];
     const list = City.getCitiesOfCountry(countryIso2) ?? [];
-    // keep unique names (some datasets include duplicates)
     const set = new Set<string>();
     for (const c of list) set.add(c.name);
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -118,7 +121,9 @@ export function Settings() {
     return out;
   }, [cities, cityQuery]);
 
+  // Clear city only when the USER changes country (not during initial load)
   useEffect(() => {
+    if (!didInitProfileRef.current) return;
     setCityQuery("");
   }, [countryIso2]);
 
@@ -147,8 +152,10 @@ export function Settings() {
         const iso2 = String(p.country_iso2 ?? "").toUpperCase().trim();
         if (iso2) setCountryIso2(iso2);
 
-        const city = String(p.city ?? "").trim();
-        setCityQuery(city);
+        // IMPORTANT:
+        // City is UI-only. Don't hydrate from DB (prevents “it keeps saving” illusion).
+        // setCityQuery(String(p.city ?? "").trim());
+        setCityQuery("");
 
         const e164 = String(p.phone_e164 ?? "").trim();
         const cc = digitsOnly(String(p.phone_country_calling_code ?? ""));
@@ -157,16 +164,19 @@ export function Settings() {
         } else {
           setPhoneNational("");
         }
+
+        // Mark init done AFTER we've applied profile values
+        didInitProfileRef.current = true;
       } catch (e: any) {
         setProfileError(e?.message || "Failed to load profile.");
+        didInitProfileRef.current = true; // still allow user interactions
       } finally {
         setProfileLoading(false);
       }
     }
 
     loadProfile();
-    
-  }, [userId]);
+  }, [userId, user?.name]);
 
   function toggle<K extends keyof UiPrefs>(key: K) {
     setSavedMsg(null);
@@ -207,12 +217,24 @@ export function Settings() {
 
           phoneCountryCallingCode: callingCode || null,
           phoneNational: phoneNational.trim() ? digitsOnly(phoneNational) : null,
+
+          // City intentionally NOT persisted
+          // city: cityQuery.trim() || null,
         }),
       });
 
       const text = await res.text().catch(() => "");
       if (!res.ok) {
-        const msg = text ? (() => { try { return JSON.parse(text)?.details || JSON.parse(text)?.error || text; } catch { return text; } })() : "";
+        const msg = text
+          ? (() => {
+              try {
+                const j = JSON.parse(text);
+                return j?.details || j?.error || text;
+              } catch {
+                return text;
+              }
+            })()
+          : "";
         throw new Error(msg || "Failed to update profile.");
       }
 
@@ -279,10 +301,7 @@ export function Settings() {
 
               <label className="settings-field">
                 Country
-                <select
-                  value={countryIso2}
-                  onChange={(e) => setCountryIso2(e.target.value)}
-                >
+                <select value={countryIso2} onChange={(e) => setCountryIso2(e.target.value)}>
                   <option value="">Select country</option>
                   {countries.map((c) => (
                     <option key={c.isoCode} value={c.isoCode}>
@@ -311,13 +330,11 @@ export function Settings() {
                     disabled={!countryIso2}
                   />
                 </div>
-                <div className="muted settings-hint">
-                  Select a country first — prefix will auto-adapt.
-                </div>
+                <div className="muted settings-hint">Select a country first — prefix will auto-adapt.</div>
               </label>
 
               <label className="settings-field">
-                City
+                City (UI-only)
                 <input
                   className="input"
                   value={cityQuery}
@@ -331,6 +348,7 @@ export function Settings() {
                     <option key={name} value={name} />
                   ))}
                 </datalist>
+                <div className="muted settings-hint">This field is not saved to the database.</div>
               </label>
 
               {profileError && <div className="settings-alert">{profileError}</div>}
@@ -515,3 +533,5 @@ export function Settings() {
     </div>
   );
 }
+
+export default Settings;
