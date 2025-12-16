@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { City, Country } from "@countrystatecity/countries";
+import { City, Country } from "country-state-city";
 
 import { BRAND } from "@/app/config/constants";
 import { ROUTES } from "@/app/config/routes";
