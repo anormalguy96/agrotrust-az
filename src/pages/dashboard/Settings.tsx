@@ -1,8 +1,6 @@
-// agrotrust-az/src/pages/dashboard/Settings.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { City, Country } from "@countrystatecity/countries";
 
 import { BRAND } from "@/app/config/constants";
 import { ROUTES } from "@/app/config/routes";
@@ -33,199 +31,209 @@ function loadPrefs(): UiPrefs {
 function savePrefs(p: UiPrefs) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(p));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
-type Profile = {
-  id: string;
-  email?: string | null;
-  role?: string | null;
-
-  // editable
-  fullName?: string | null;
-  phone?: string | null;
-  companyName?: string | null;
-  country?: string | null;
-  city?: string | null;
-};
-
-function safeJsonParse<T>(text: string): T | null {
-  try {
-    if (!text) return null;
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
-
-function shortText(text: string, max = 450) {
-  const t = (text || "").trim();
-  if (!t) return "";
-  return t.length > max ? `${t.slice(0, max)}…` : t;
+function digitsOnly(v: string) {
+  return (v || "").replace(/[^\d]/g, "");
 }
 
 const FN_BASE = "/.netlify/functions";
 const PROFILE_ME = `${FN_BASE}/profile-me`;
 const PROFILE_UPDATE = `${FN_BASE}/profile-update`;
 
-async function fetchProfile(userId: string): Promise<Profile> {
-  const url = `${PROFILE_ME}?userId=${encodeURIComponent(userId)}`;
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-  });
+type Profile = {
+  id?: string;
+  app_user_id?: string;
 
-  const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(shortText(text) || "Failed to load profile.");
+  full_name?: string | null;
+  company_name?: string | null;
 
-  const data = safeJsonParse<any>(text);
-  // support { profile } or profile directly
-  const p = data?.profile ?? data ?? {};
-  return {
-    id: String(p.id ?? userId),
-    email: p.email ?? null,
-    role: p.role ?? null,
-    fullName: p.full_name ?? p.fullName ?? p.name ?? null,
-    phone: p.phone ?? null,
-    companyName: p.company_name ?? p.companyName ?? null,
-    country: p.country ?? null,
-    city: p.city ?? null,
-  };
-}
-
-type UpdateProfileInput = {
-  userId: string;
-  fullName?: string | null;
-  phone?: string | null;
-  companyName?: string | null;
   country?: string | null;
+  country_iso2?: string | null;
   city?: string | null;
+
+  phone_country_calling_code?: string | null;
+  phone_e164?: string | null;
+
+  updated_at?: string | null;
 };
-
-async function updateProfile(input: UpdateProfileInput): Promise<Profile> {
-  const res = await fetch(PROFILE_UPDATE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify(input),
-  });
-
-  const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(shortText(text) || "Failed to update profile.");
-
-  const data = safeJsonParse<any>(text);
-  const p = data?.profile ?? data ?? {};
-  return {
-    id: String(p.id ?? input.userId),
-    email: p.email ?? null,
-    role: p.role ?? null,
-    fullName: p.full_name ?? p.fullName ?? p.name ?? input.fullName ?? null,
-    phone: p.phone ?? input.phone ?? null,
-    companyName: p.company_name ?? p.companyName ?? input.companyName ?? null,
-    country: p.country ?? input.country ?? null,
-    city: p.city ?? input.city ?? null,
-  };
-}
 
 export function Settings() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { user, signOut, getRoleLabel } = useAuth() as any;
 
-  const userId = (user?.id || "").trim();
+  const userId = String(user?.id ?? "").trim();
   const roleLabel = useMemo(() => getRoleLabel(user?.role), [user?.role, getRoleLabel]);
 
   const [prefs, setPrefs] = useState<UiPrefs>(() => loadPrefs());
-  const [prefsMsg, setPrefsMsg] = useState<string | null>(null);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
-  const profileQuery = useQuery({
-    queryKey: ["profile", userId],
-    queryFn: () => fetchProfile(userId),
-    enabled: Boolean(userId),
-  });
+  // --- profile state ---
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
-  const profile = profileQuery.data;
-
-  // editable form state
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
 
-  const [profileMsg, setProfileMsg] = useState<string | null>(null);
-  const [profileErr, setProfileErr] = useState<string | null>(null);
+  const countries = useMemo(() => {
+    // returns { name, isoCode, phonecode, ... }
+    const all = Country.getAllCountries();
+    return all.sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
+
+  const [countryIso2, setCountryIso2] = useState<string>("");
+  const selectedCountry = useMemo(
+    () => countries.find((c) => c.isoCode === countryIso2) ?? null,
+    [countries, countryIso2]
+  );
+
+  const callingCode = useMemo(() => {
+    const pc = selectedCountry?.phonecode ? String(selectedCountry.phonecode) : "";
+    return digitsOnly(pc);
+  }, [selectedCountry]);
+
+  const [phoneNational, setPhoneNational] = useState<string>("");
+
+  const [cityQuery, setCityQuery] = useState<string>("");
+
+  const cities = useMemo(() => {
+    if (!countryIso2) return [];
+    const list = City.getCitiesOfCountry(countryIso2) ?? [];
+    // keep unique names (some datasets include duplicates)
+    const set = new Set<string>();
+    for (const c of list) set.add(c.name);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [countryIso2]);
+
+  const citySuggestions = useMemo(() => {
+    const q = cityQuery.trim().toLowerCase();
+    if (!q) return cities.slice(0, 250);
+    const out: string[] = [];
+    for (const name of cities) {
+      if (name.toLowerCase().includes(q)) out.push(name);
+      if (out.length >= 250) break;
+    }
+    return out;
+  }, [cities, cityQuery]);
 
   useEffect(() => {
-    // hydrate form once profile loads
-    if (!profile) return;
-    setFullName((profile.fullName ?? user?.name ?? "").toString());
-    setPhone((profile.phone ?? "").toString());
-    setCompanyName((profile.companyName ?? "").toString());
-    setCountry((profile.country ?? "").toString());
-    setCity((profile.city ?? "").toString());
-  }, [profile, user?.name]);
+    setCityQuery("");
+  }, [countryIso2]);
 
-  const updateProfileMutation = useMutation({
-    mutationFn: updateProfile,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["profile", userId] });
-      setProfileErr(null);
-      setProfileMsg("Profile updated.");
-    },
-    onError: (err: unknown) => {
-      setProfileMsg(null);
-      setProfileErr(err instanceof Error ? err.message : "Failed to update profile.");
-    },
-  });
+  useEffect(() => {
+    async function loadProfile() {
+      if (!userId) return;
+
+      setProfileLoading(true);
+      setProfileError(null);
+
+      try {
+        const res = await fetch(`${PROFILE_ME}?userId=${encodeURIComponent(userId)}`, {
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+        });
+
+        const text = await res.text().catch(() => "");
+        if (!res.ok) throw new Error(text || "Failed to load profile.");
+
+        const json = JSON.parse(text) as { profile?: Profile };
+        const p = (json.profile ?? {}) as Profile;
+
+        setFullName(String(p.full_name ?? user?.name ?? "").trim());
+        setCompanyName(String(p.company_name ?? "").trim());
+
+        const iso2 = String(p.country_iso2 ?? "").toUpperCase().trim();
+        if (iso2) setCountryIso2(iso2);
+
+        const city = String(p.city ?? "").trim();
+        setCityQuery(city);
+
+        const e164 = String(p.phone_e164 ?? "").trim();
+        const cc = digitsOnly(String(p.phone_country_calling_code ?? ""));
+        if (e164 && cc && e164.startsWith(`+${cc}`)) {
+          setPhoneNational(digitsOnly(e164.slice(1 + cc.length)));
+        } else {
+          setPhoneNational("");
+        }
+      } catch (e: any) {
+        setProfileError(e?.message || "Failed to load profile.");
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+
+    loadProfile();
+    
+  }, [userId]);
 
   function toggle<K extends keyof UiPrefs>(key: K) {
-    setPrefsMsg(null);
+    setSavedMsg(null);
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   function handleSavePrefs() {
     savePrefs(prefs);
-    setPrefsMsg("Preferences saved for this browser.");
+    setSavedMsg("Preferences saved for this browser.");
   }
 
-  function handleSignOut() {
+  function handleChangeRole() {
     signOut();
     navigate(ROUTES.AUTH.SIGN_IN, { replace: true });
   }
 
-  function handleSaveProfile() {
-    setProfileMsg(null);
-    setProfileErr(null);
-
+  async function handleSaveProfile() {
     if (!userId) {
-      setProfileErr("You must be signed in to edit your profile.");
+      setProfileError("Missing userId (not signed in).");
       return;
     }
 
-    const payload: UpdateProfileInput = {
-      userId,
-      fullName: fullName.trim() || null,
-      phone: phone.trim() || null,
-      companyName: companyName.trim() || null,
-      country: country.trim() || null,
-      city: city.trim() || null,
-    };
+    setProfileSaving(true);
+    setProfileError(null);
 
-    updateProfileMutation.mutate(payload);
+    try {
+      const res = await fetch(PROFILE_UPDATE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          userId,
+          fullName: fullName.trim() || null,
+          companyName: companyName.trim() || null,
+
+          countryIso2: countryIso2 || null,
+          country: selectedCountry?.name ?? null,
+          city: cityQuery.trim() || null,
+
+          phoneCountryCallingCode: callingCode || null,
+          phoneNational: phoneNational.trim() ? digitsOnly(phoneNational) : null,
+        }),
+      });
+
+      const text = await res.text().catch(() => "");
+      if (!res.ok) {
+        const msg = text ? (() => { try { return JSON.parse(text)?.details || JSON.parse(text)?.error || text; } catch { return text; } })() : "";
+        throw new Error(msg || "Failed to update profile.");
+      }
+
+      setSavedMsg("Profile saved.");
+    } catch (e: any) {
+      setProfileError(e?.message || "Failed to update profile.");
+    } finally {
+      setProfileSaving(false);
+    }
   }
-
-  const email = profile?.email ?? user?.email ?? null;
 
   return (
     <div className="settings-page">
       <header className="settings-head">
         <div>
-          <p className="dash-kicker">Account</p>
+          <p className="dash-kicker">Preferences</p>
           <h1 className="dash-title">Settings</h1>
-          <p className="muted settings-subtitle">Edit your profile and local interface preferences.</p>
+          <p className="muted settings-subtitle">
+            Manage your profile, account context, and interface options.
+          </p>
         </div>
 
         <div className="settings-head__actions">
@@ -241,112 +249,139 @@ export function Settings() {
           <div className="settings-card__head">
             <div>
               <div className="settings-card__label">Profile</div>
-              <div className="settings-card__title">Your details</div>
+              <div className="settings-card__title">Edit your details</div>
             </div>
             <span className="settings-pill">{roleLabel}</span>
           </div>
 
-          {!userId && (
-            <div className="settings-alert settings-alert--error">
-              You are not signed in. Please sign in to edit your profile.
-            </div>
-          )}
-
-          {profileQuery.isLoading && userId && (
+          {profileLoading ? (
             <div className="muted">Loading profile…</div>
-          )}
+          ) : (
+            <div className="settings-form">
+              <label className="settings-field">
+                Full name
+                <input
+                  className="input"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your full name"
+                />
+              </label>
 
-          {profileQuery.isError && (
-            <div className="settings-alert settings-alert--error">
-              {(profileQuery.error as Error)?.message ?? "Failed to load profile."}
+              <label className="settings-field">
+                Company name
+                <input
+                  className="input"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Optional"
+                />
+              </label>
+
+              <label className="settings-field">
+                Country
+                <select
+                  value={countryIso2}
+                  onChange={(e) => setCountryIso2(e.target.value)}
+                >
+                  <option value="">Select country</option>
+                  {countries.map((c) => (
+                    <option key={c.isoCode} value={c.isoCode}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="settings-field">
+                Phone
+                <div className="phone-row">
+                  <input
+                    className="input phone-prefix"
+                    value={callingCode ? `+${callingCode}` : ""}
+                    readOnly
+                    placeholder="+"
+                    title="Auto from country"
+                  />
+                  <input
+                    className="input"
+                    value={phoneNational}
+                    onChange={(e) => setPhoneNational(e.target.value)}
+                    placeholder="Local number"
+                    inputMode="tel"
+                    disabled={!countryIso2}
+                  />
+                </div>
+                <div className="muted settings-hint">
+                  Select a country first — prefix will auto-adapt.
+                </div>
+              </label>
+
+              <label className="settings-field">
+                City
+                <input
+                  className="input"
+                  value={cityQuery}
+                  onChange={(e) => setCityQuery(e.target.value)}
+                  placeholder={countryIso2 ? "Type to search cities…" : "Select a country first"}
+                  list="city-suggestions"
+                  disabled={!countryIso2}
+                />
+                <datalist id="city-suggestions">
+                  {citySuggestions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </label>
+
+              {profileError && <div className="settings-alert">{profileError}</div>}
+
+              <div className="settings-actions">
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={handleSaveProfile}
+                  disabled={profileSaving}
+                >
+                  {profileSaving ? "Saving…" : "Save profile"}
+                </button>
+              </div>
             </div>
           )}
+        </div>
 
-          <div className="settings-form">
-            <label className="settings-field">
-              Full name
-              <input
-                className="input"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your name"
-                disabled={!userId}
-              />
-            </label>
-
-            <label className="settings-field">
-              Email (read-only)
-              <input className="input" value={email ?? ""} readOnly />
-            </label>
-
-            <label className="settings-field">
-              Phone (optional)
-              <input
-                className="input"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+994 ..."
-                disabled={!userId}
-              />
-            </label>
-
-            <label className="settings-field">
-              Company (optional)
-              <input
-                className="input"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Company / Cooperative / Buyer org"
-                disabled={!userId}
-              />
-            </label>
-
-            <label className="settings-field">
-              Country (optional)
-              <input
-                className="input"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                placeholder="Azerbaijan"
-                disabled={!userId}
-              />
-            </label>
-
-            <label className="settings-field">
-              City (optional)
-              <input
-                className="input"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Baku"
-                disabled={!userId}
-              />
-            </label>
+        {/* Account */}
+        <div className="card">
+          <div className="settings-card__head">
+            <div>
+              <div className="settings-card__label">Account</div>
+              <div className="settings-card__title">Demo identity</div>
+            </div>
+            <span className="settings-pill">{roleLabel}</span>
           </div>
 
-          {profileErr && <div className="settings-alert settings-alert--error">{profileErr}</div>}
-          {profileMsg && <div className="settings-alert">{profileMsg}</div>}
+          <div className="settings-kv">
+            <div className="settings-kv__row">
+              <span className="settings-kv__label">Email</span>
+              <span className="settings-kv__value">{user?.email ?? "—"}</span>
+            </div>
+            <div className="settings-kv__row">
+              <span className="settings-kv__label">Role</span>
+              <span className="settings-kv__value">{roleLabel}</span>
+            </div>
+          </div>
 
           <div className="settings-actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={handleSaveProfile}
-              disabled={!userId || updateProfileMutation.isPending}
-            >
-              {updateProfileMutation.isPending ? "Saving…" : "Save profile"}
+            <button type="button" className="btn btn--primary" onClick={handleChangeRole}>
+              Change role (re-sign in)
             </button>
-            <button type="button" className="btn btn--ghost" onClick={handleSignOut}>
+            <button type="button" className="btn btn--ghost" onClick={signOut}>
               Sign out
             </button>
           </div>
-
-          <p className="muted settings-note">
-            Profile updates are stored in the backend (Supabase) so they persist across sessions.
-          </p>
         </div>
 
-        {/* Preferences */}
+        {/* Interface */}
         <div className="card">
           <div className="settings-card__head">
             <div>
@@ -363,9 +398,9 @@ export function Settings() {
                 onChange={() => toggle("showDemoHints")}
               />
               <span>
-                <span className="settings-toggle__title">Show hints</span>
+                <span className="settings-toggle__title">Show demo hints</span>
                 <span className="muted settings-toggle__desc">
-                  Show small helper hints across dashboard pages.
+                  Keeps small narrative prompts visible across dashboard pages.
                 </span>
               </span>
             </label>
@@ -379,13 +414,13 @@ export function Settings() {
               <span>
                 <span className="settings-toggle__title">Dense tables</span>
                 <span className="muted settings-toggle__desc">
-                  Compact layout for data-heavy views.
+                  A compact layout preference for data-heavy views.
                 </span>
               </span>
             </label>
           </div>
 
-          {prefsMsg && <div className="settings-alert">{prefsMsg}</div>}
+          {savedMsg && <div className="settings-alert">{savedMsg}</div>}
 
           <div className="settings-actions">
             <button type="button" className="btn btn--primary" onClick={handleSavePrefs}>
@@ -398,14 +433,16 @@ export function Settings() {
                 const reset = { denseTables: false, showDemoHints: true };
                 setPrefs(reset);
                 savePrefs(reset);
-                setPrefsMsg("Preferences reset.");
+                setSavedMsg("Preferences reset.");
               }}
             >
               Reset
             </button>
           </div>
 
-          <p className="muted settings-note">Stored only in your browser.</p>
+          <p className="muted settings-note">
+            These preferences are stored only in your browser for the hackathon MVP.
+          </p>
         </div>
 
         {/* Environment */}
@@ -413,7 +450,7 @@ export function Settings() {
           <div className="settings-card__head">
             <div>
               <div className="settings-card__label">Environment</div>
-              <div className="settings-card__title">Build flags</div>
+              <div className="settings-card__title">Build flags (read-only)</div>
             </div>
           </div>
 
@@ -431,92 +468,51 @@ export function Settings() {
               <span className="settings-kv__value">{env.apiBase || "Not configured"}</span>
             </div>
           </div>
-
-          <p className="muted settings-note">Read-only values from build-time env.</p>
         </div>
       </section>
 
-      <style>{`
-        .settings-page{ display:flex; flex-direction: column; gap: var(--space-5); }
+      <style>
+        {`
+          .settings-page{ display:flex; flex-direction: column; gap: var(--space-5); }
+          .settings-head{ display:flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+          .settings-subtitle{ margin: 0; }
+          .settings-head__actions{ display:flex; gap: var(--space-2); flex-wrap: wrap; }
 
-        .settings-head{ display:flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
-        .settings-subtitle{ margin: 0; }
-        .settings-head__actions{ display:flex; gap: var(--space-2); flex-wrap: wrap; }
+          .settings-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+          .settings-card__head{ display:flex; align-items: start; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
 
-        .settings-grid{
-          display:grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: var(--space-4);
-          align-items: start;
-        }
+          .settings-card__label{ font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); margin-bottom: 2px; }
+          .settings-card__title{ font-size: var(--fs-5); font-weight: var(--fw-semibold); }
 
-        .settings-card__head{ display:flex; align-items: start; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
-        .settings-card__label{ font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); margin-bottom: 2px; }
-        .settings-card__title{ font-size: var(--fs-5); font-weight: var(--fw-semibold); }
+          .settings-pill{ display:inline-flex; align-items:center; padding: 4px 10px; border-radius: var(--radius-pill); border: var(--border-1); background: var(--color-surface); font-size: var(--fs-1); font-weight: var(--fw-medium); white-space: nowrap; }
 
-        .settings-pill{
-          display:inline-flex; align-items:center;
-          padding: 4px 10px; border-radius: var(--radius-pill);
-          border: var(--border-1); background: var(--color-surface);
-          font-size: var(--fs-1); font-weight: var(--fw-medium); white-space: nowrap;
-        }
+          .settings-kv{ display:flex; flex-direction: column; gap: var(--space-2); }
+          .settings-kv__row{ display:flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
+          .settings-kv__row:last-child{ border-bottom: none; }
+          .settings-kv__label{ font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); }
+          .settings-kv__value{ font-size: var(--fs-2); font-weight: var(--fw-medium); text-align: right; }
 
-        .settings-kv{ display:flex; flex-direction: column; gap: var(--space-2); }
-        .settings-kv__row{ display:flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
-        .settings-kv__row:last-child{ border-bottom: none; }
-        .settings-kv__label{ font-size: var(--fs-1); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-soft); }
-        .settings-kv__value{ font-size: var(--fs-2); font-weight: var(--fw-medium); text-align: right; }
+          .settings-actions{ display:flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); }
 
-        .settings-form{
-          display:grid;
-          grid-template-columns: 1fr 1fr;
-          gap: var(--space-3);
-          align-items: end;
-        }
+          .settings-toggle-list{ display:flex; flex-direction: column; gap: var(--space-3); }
+          .settings-toggle{ display:flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-1); border: var(--border-1); background: var(--color-surface); }
+          .settings-toggle input{ margin-top: 4px; }
+          .settings-toggle__title{ display:block; font-size: var(--fs-3); font-weight: var(--fw-medium); margin-bottom: 2px; }
+          .settings-toggle__desc{ display:block; font-size: var(--fs-1); }
 
-        .settings-field{
-          display:flex;
-          flex-direction: column;
-          gap: var(--space-2);
-          font-size: var(--fs-2);
-        }
+          .settings-alert{ margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-1); border: var(--border-1); background: var(--color-surface); font-size: var(--fs-2); }
 
-        .settings-actions{ display:flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); }
-        .settings-note{ margin-top: var(--space-3); font-size: var(--fs-1); }
+          .settings-form{ display:flex; flex-direction: column; gap: var(--space-3); }
+          .settings-field{ display:flex; flex-direction: column; gap: var(--space-2); }
+          .settings-hint{ margin-top: 6px; font-size: var(--fs-1); }
 
-        .settings-toggle-list{ display:flex; flex-direction: column; gap: var(--space-3); }
-        .settings-toggle{
-          display:flex; align-items: flex-start; gap: var(--space-3);
-          padding: var(--space-3); border-radius: var(--radius-1);
-          border: var(--border-1); background: var(--color-surface);
-        }
-        .settings-toggle input{ margin-top: 4px; }
-        .settings-toggle__title{ display:block; font-size: var(--fs-3); font-weight: var(--fw-medium); margin-bottom: 2px; }
-        .settings-toggle__desc{ display:block; font-size: var(--fs-1); }
+          .phone-row{ display:grid; grid-template-columns: 90px 1fr; gap: var(--space-2); align-items: center; }
+          .phone-prefix{ opacity: 0.9; }
 
-        .settings-alert{
-          margin-top: var(--space-3);
-          padding: var(--space-3);
-          border-radius: var(--radius-1);
-          border: var(--border-1);
-          background: var(--color-surface);
-          font-size: var(--fs-2);
-        }
-        .settings-alert--error{
-          background: color-mix(in oklab, var(--color-danger) 10%, transparent);
-        }
-
-        @media (max-width: 1200px){
-          .settings-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .settings-form{ grid-template-columns: 1fr; }
-        }
-        @media (max-width: 760px){
-          .settings-grid{ grid-template-columns: 1fr; }
-          .settings-form{ grid-template-columns: 1fr; }
-        }
-      `}</style>
+          @media (max-width: 1200px){ .settings-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+          @media (max-width: 760px){ .settings-grid{ grid-template-columns: 1fr; } }
+        `}
+      </style>
     </div>
   );
 }
-
-export default Settings;
