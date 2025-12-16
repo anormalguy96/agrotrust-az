@@ -32,31 +32,14 @@ export const handler: Handler = async (event) => {
 
     let q = supabaseAdmin
       .from("rfqs")
-      .select(
-        [
-          "id",
-          "created_at",
-          "status",
-          "buyer_id",
-          "buyer_name",
-          "cooperative_id",
-          "lot_id",
-          "product",
-          "product_name",
-          "quantity_kg",
-          "target_price_per_kg",
-          "region_preference",
-          "preferred_certifications",
-          "notes",
-          "created_by",
-        ].join(",")
-      )
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (userId) {
       if (role === "buyer") q = q.eq("buyer_id", userId);
       else if (role === "cooperative") q = q.eq("cooperative_id", userId);
       else if (role === "admin") {
+        
       } else {
         q = q.eq("created_by", userId);
       }
@@ -90,8 +73,8 @@ export const handler: Handler = async (event) => {
       cooperative_id: r.cooperative_id ?? null,
       lot_id: r.lot_id ?? null,
 
-      product: (r.product ?? r.product_name ?? "").toString(),
-      product_name: (r.product_name ?? r.product ?? "").toString(),
+      product: String(r.product ?? r.product_name ?? "").trim(),
+      product_name: String(r.product_name ?? r.product ?? "").trim(),
 
       quantity_kg: toNumber(r.quantity_kg),
       target_price_per_kg: r.target_price_per_kg === null ? null : toNumber(r.target_price_per_kg),
@@ -103,7 +86,10 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
       body: JSON.stringify(out),
     };
   } catch (err) {
