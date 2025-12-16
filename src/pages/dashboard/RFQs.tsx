@@ -26,7 +26,6 @@ export type RFQ = {
   lotId?: string;
   notes?: string;
 
-
   buyerName?: string;
   preferredCertifications?: string[];
 };
@@ -173,13 +172,10 @@ async function fetchRfqs(args?: FetchRfqsArgs): Promise<RFQ[]> {
 
   const urlWithQs = (base: string) => (qs.toString() ? `${base}?${qs.toString()}` : base);
 
-  const { text } = await fetchFirstOk(
-    RFQ_LIST_CANDIDATES.map(urlWithQs),
-    {
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-    }
-  );
+  const { text } = await fetchFirstOk(RFQ_LIST_CANDIDATES.map(urlWithQs), {
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+  });
 
   const data = safeJsonParse<unknown>(text);
   const arr = unwrapList(data);
@@ -241,13 +237,16 @@ async function updateRfqStatus(input: UpdateRfqStatusInput): Promise<RFQ> {
   return mapRfqRow(row ?? {});
 }
 
-
 function statusLabel(s: RFQStatus) {
   switch (s) {
-    case "draft": return "Draft";
-    case "sent": return "Sent";
-    case "answered": return "Answered";
-    case "closed": return "Closed";
+    case "draft":
+      return "Draft";
+    case "sent":
+      return "Sent";
+    case "answered":
+      return "Answered";
+    case "closed":
+      return "Closed";
   }
 }
 
@@ -259,18 +258,31 @@ export function RFQs() {
 
   const rawRole = (user?.role || "").toLowerCase();
   const role = rawRole === "coop" ? "cooperative" : rawRole;
-  
+
   const isBuyer = role === "buyer";
   const isAdmin = role === "admin";
   const isCooperative = role === "cooperative";
 
-
   const canCreate = isBuyer || isAdmin;
   const canUpdateStatus = isAdmin;
+
+  // ✅ FIX: define userId (your crash was because this variable didn't exist)
+  const userIdCandidate =
+    (user?.id ??
+      user?.userId ??
+      user?.uid ??
+      user?.sub ??
+      user?.profile?.id ??
+      user?.profileId ??
+      "") as string;
+
+  const userId = userIdCandidate?.trim() || undefined;
 
   const rfqsQuery = useQuery({
     queryKey: ["rfqs", role, userId],
     queryFn: () => fetchRfqs({ role, userId }),
+    // ✅ avoid running before auth loads for non-admin roles
+    enabled: Boolean(role) && (isAdmin || Boolean(userId)),
   });
 
   const rfqs = rfqsQuery.data ?? [];
@@ -292,7 +304,6 @@ export function RFQs() {
   const [statusFilter, setStatusFilter] = useState<RFQStatus | "all">("all");
   const [productFilter, setProductFilter] = useState<string>("all");
 
-
   const [product, setProduct] = useState<string>("");
   const [quantityKg, setQuantityKg] = useState<string>("5000");
   const [targetPrice, setTargetPrice] = useState<string>("");
@@ -300,7 +311,6 @@ export function RFQs() {
   const [lotId, setLotId] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
-  
   const [buyerName, setBuyerName] = useState<string>("");
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -372,6 +382,12 @@ export function RFQs() {
 
     if (!canCreate) {
       setFormError("Only buyer or admin roles can create RFQs.");
+      return;
+    }
+
+    // if buyer/coop tries to create while userId isn't ready
+    if (!isAdmin && !userId) {
+      setFormError("Your session is not ready yet. Please refresh and try again.");
       return;
     }
 
@@ -447,9 +463,7 @@ export function RFQs() {
             <div>
               <div className="rfq-create__label">New RFQ</div>
               <div className="rfq-create__title">Create a real RFQ record</div>
-              <div className="muted">
-                This is persisted in the backend (no demo/mock data).
-              </div>
+              <div className="muted">This is persisted in the backend (no demo/mock data).</div>
             </div>
             <div className="rfq-create__meta">
               <div className="rfq-meta-box">
@@ -587,7 +601,10 @@ export function RFQs() {
 
           <label className="rfq-label">
             Status
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as RFQStatus | "all")}>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as RFQStatus | "all")}
+            >
               <option value="all">All statuses</option>
               <option value="draft">Draft</option>
               <option value="sent">Sent</option>
@@ -634,7 +651,9 @@ export function RFQs() {
 
         {rfqsQuery.isError && (
           <div className="rfq-state">
-            <p className="muted">{(rfqsQuery.error as Error)?.message ?? "Failed to load RFQs from backend."}</p>
+            <p className="muted">
+              {(rfqsQuery.error as Error)?.message ?? "Failed to load RFQs from backend."}
+            </p>
           </div>
         )}
 
@@ -663,7 +682,9 @@ export function RFQs() {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.id}>
-                  <td><code className="rfq-code">{r.id}</code></td>
+                  <td>
+                    <code className="rfq-code">{r.id}</code>
+                  </td>
                   <td>{r.buyerName ?? r.buyerId ?? "—"}</td>
                   <td>{r.product || "—"}</td>
                   <td>{r.quantityKg} kg</td>
@@ -674,7 +695,9 @@ export function RFQs() {
                       <NavLink to={lotDetailsPath(r.lotId)} className="rfq-lot-link" title="Open linked lot">
                         {r.lotId}
                       </NavLink>
-                    ) : "—"}
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>
                     <span className={`rfq-pill rfq-pill--${r.status}`}>{statusLabel(r.status)}</span>
