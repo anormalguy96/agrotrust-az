@@ -268,23 +268,12 @@ export function RFQs() {
   const canCreate = isBuyer || isAdmin;
   const canUpdateStatus = isAdmin;
 
-  // ✅ FIX: define userId (your crash was because this variable didn't exist)
-  const userIdCandidate =
-    (user?.id ??
-      user?.userId ??
-      user?.uid ??
-      user?.sub ??
-      user?.profile?.id ??
-      user?.profileId ??
-      "") as string;
-
-  const userId = userIdCandidate?.trim() || undefined;
-
   const rfqsQuery = useQuery({
     queryKey: ["rfqs", role, userId],
     queryFn: () => fetchRfqs({ role, userId }),
     enabled: !!role && (role === "admin" || !!userId),
   });
+
 
   const rfqs = rfqsQuery.data ?? [];
 
