@@ -54,7 +54,6 @@ export const handler: Handler = async (event) => {
 
       country: payload.country ?? null,
       country_iso2: iso2 || null,
-      city: payload.city ?? null,
 
       phone_country_calling_code: calling || null,
       phone_e164: computedE164 ?? (payload.phoneE164 ?? null),
