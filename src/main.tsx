@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
+
 import { App } from "@/app/App";
 import { AuthProvider } from "@/app/providers/AuthProvider";
 import { QueryProvider } from "@/app/providers/QueryProvider";
@@ -17,14 +18,16 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <I18nProvider>
-      <ThemeProvider>
-        <QueryProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </QueryProvider>
-      </ThemeProvider>
-    </I18nProvider>
+    <HelmetProvider>
+      <I18nProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </QueryProvider>
+        </ThemeProvider>
+      </I18nProvider>
+    </HelmetProvider>
   </React.StrictMode>
 );
