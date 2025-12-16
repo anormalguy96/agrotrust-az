@@ -204,7 +204,6 @@ export function Settings() {
 
           countryIso2: countryIso2 || null,
           country: selectedCountry?.name ?? null,
-          city: cityQuery.trim() || null,
 
           phoneCountryCallingCode: callingCode || null,
           phoneNational: phoneNational.trim() ? digitsOnly(phoneNational) : null,
