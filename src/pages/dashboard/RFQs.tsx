@@ -128,9 +128,41 @@ function mapRfqRow(row: RfqListRow): RFQ {
 // ---------- Backend calls ----------
 
 const FN_BASE = "/.netlify/functions";
-const RFQ_LIST = `${FN_BASE}/rfqs-list`;
-const RFQ_CREATE = `${FN_BASE}/rfqs-create`;
-const RFQ_UPDATE_STATUS = `${FN_BASE}/rfqs-update-status`;
+
+const RFQ_LIST_CANDIDATES = [`${FN_BASE}/rfq-list`, `${FN_BASE}/rfqs-list`];
+const RFQ_CREATE_CANDIDATES = [`${FN_BASE}/rfq-create`, `${FN_BASE}/rfqs-create`];
+const RFQ_UPDATE_STATUS_CANDIDATES = [
+  `${FN_BASE}/rfq-update-status`,
+  `${FN_BASE}/rfqs-update-status`,
+];
+
+async function fetchFirstOk(urls: string[], init?: RequestInit) {
+  let lastText = "";
+  let lastStatus = 0;
+
+  for (const url of urls) {
+    const res = await fetch(url, init);
+    const text = await res.text().catch(() => "");
+    lastText = text;
+    lastStatus = res.status;
+
+    if (res.ok) return { url, text };
+    if (res.status !== 404) break;
+  }
+
+  throw new Error(shortText(lastText) || `Request failed (status ${lastStatus}).`);
+}
+
+function unwrapList(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object" && Array.isArray((data as any).items)) return (data as any).items;
+  return [];
+}
+
+function unwrapRow(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+  return (data as any).rfq ?? (data as any).item ?? data;
+}
 
 type FetchRfqsArgs = { role?: string; userId?: string };
 
@@ -139,24 +171,18 @@ async function fetchRfqs(args?: FetchRfqsArgs): Promise<RFQ[]> {
   if (args?.role) qs.set("role", args.role);
   if (args?.userId) qs.set("userId", args.userId);
 
-  const url = qs.toString() ? `${RFQ_LIST}?${qs.toString()}` : RFQ_LIST;
+  const urlWithQs = (base: string) => (qs.toString() ? `${base}?${qs.toString()}` : base);
 
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-  });
-
-  const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(shortText(text) || "Failed to load RFQs.");
+  const { text } = await fetchFirstOk(
+    RFQ_LIST_CANDIDATES.map(urlWithQs),
+    {
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+    }
+  );
 
   const data = safeJsonParse<unknown>(text);
-
-  // Support BOTH: array response OR { items: [...] }
-  const arr =
-    Array.isArray(data) ? data :
-    data && typeof data === "object" && Array.isArray((data as any).items) ? (data as any).items :
-    [];
-
+  const arr = unwrapList(data);
   return (arr as RfqListRow[]).map(mapRfqRow);
 }
 
@@ -173,13 +199,12 @@ type CreateRfqInput = {
   lotId?: string;
   notes?: string;
 
-  // keep these in UI if you want, but they are NOT saved unless DB has columns
   buyerName?: string;
   preferredCertifications?: string[];
 };
 
 async function createRfq(input: CreateRfqInput): Promise<RFQ> {
-  const res = await fetch(RFQ_CREATE, {
+  const { text } = await fetchFirstOk(RFQ_CREATE_CANDIDATES, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
@@ -188,7 +213,6 @@ async function createRfq(input: CreateRfqInput): Promise<RFQ> {
       cooperativeId: input.cooperativeId ?? null,
       lotId: input.lotId ?? null,
 
-      // match your DB schema
       productName: input.productName,
       quantityKg: input.quantityKg,
       targetPricePerKg: input.targetPricePerKg ?? null,
@@ -197,29 +221,26 @@ async function createRfq(input: CreateRfqInput): Promise<RFQ> {
     }),
   });
 
-  const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(shortText(text) || "Failed to create RFQ.");
-
-  const row = safeJsonParse<RfqListRow>(text);
+  const data = safeJsonParse<unknown>(text);
+  const row = unwrapRow(data) as RfqListRow | null;
   return mapRfqRow(row ?? {});
 }
 
 type UpdateRfqStatusInput = { id: string; status: RFQStatus };
 
 async function updateRfqStatus(input: UpdateRfqStatusInput): Promise<RFQ> {
-  const res = await fetch(RFQ_UPDATE_STATUS, {
+  const { text } = await fetchFirstOk(RFQ_UPDATE_STATUS_CANDIDATES, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify(input),
   });
 
-  const text = await res.text().catch(() => "");
-  if (!res.ok) throw new Error(shortText(text) || "Failed to update RFQ status.");
-
-  const row = safeJsonParse<RfqListRow>(text);
+  const data = safeJsonParse<unknown>(text);
+  const row = unwrapRow(data) as RfqListRow | null;
   return mapRfqRow(row ?? {});
 }
+
 
 function statusLabel(s: RFQStatus) {
   switch (s) {
@@ -236,12 +257,13 @@ export function RFQs() {
   const { user, getRoleLabel } = useAuth() as any;
   const queryClient = useQueryClient();
 
-  const role = (user?.role || "").toLowerCase();
-  const userId = (user?.id || "").trim();
-
+  const rawRole = (user?.role || "").toLowerCase();
+  const role = rawRole === "coop" ? "cooperative" : rawRole;
+  
   const isBuyer = role === "buyer";
   const isAdmin = role === "admin";
   const isCooperative = role === "cooperative";
+
 
   const canCreate = isBuyer || isAdmin;
   const canUpdateStatus = isAdmin;
