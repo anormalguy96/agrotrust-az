@@ -1,3 +1,4 @@
+// src/i18n/I18nProvider.tsx
 import {
   createContext,
   useContext,
@@ -5,11 +6,12 @@ import {
   useMemo,
   useState,
 } from "react";
+
 import { en } from "./en";
 import { az } from "./az";
+import type { Messages } from "./types";
 
 type Language = "en" | "az";
-type Messages = typeof en;
 
 type I18nContextValue = {
   language: Language;
@@ -26,34 +28,44 @@ const allMessages: Record<Language, Messages> = {
   az,
 };
 
-function getNestedMessage(messages: any, key: string): string | undefined {
-  return key.split(".").reduce((acc, part) => {
-    if (acc && typeof acc === "object" && part in acc) {
-      return acc[part];
-    }
-    return undefined;
-  }, messages);
+// Supports nested keys like: "auth.signUp.title"
+function getNestedMessage(messages: unknown, key: string): string | undefined {
+  const parts = (key || "").split(".").filter(Boolean);
+  let cur: any = messages;
+
+  for (const part of parts) {
+    if (!cur || typeof cur !== "object" || !(part in cur)) return undefined;
+    cur = cur[part];
+  }
+
+  return typeof cur === "string" ? cur : undefined;
+}
+
+function detectInitialLanguage(): Language {
+  // 1) localStorage wins
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === "az" || stored === "en") return stored;
+  } catch {
+    // ignore
+  }
+
+  // 2) browser language fallback
+  try {
+    const browser = (navigator.language || "").toLowerCase();
+    if (browser.startsWith("az")) return "az";
+  } catch {
+    // ignore
+  }
+
+  return "en";
 }
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("en");
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY) as
-        | Language
-        | null;
-      if (stored === "az" || stored === "en") {
-        setLanguageState(stored);
-        return;
-      }
-
-      const browser = navigator.language.toLowerCase();
-      if (browser.startsWith("az")) {
-        setLanguageState("az");
-      }
-    } catch {
-    }
+    setLanguageState(detectInitialLanguage());
   }, []);
 
   const setLanguage = (lang: Language) => {
@@ -61,33 +73,31 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, lang);
     } catch {
+      // ignore
     }
   };
 
   const value = useMemo<I18nContextValue>(() => {
     const t = (key: string) => {
       const dict = allMessages[language] ?? en;
+
       const found = getNestedMessage(dict, key);
-      if (typeof found === "string") return found;
+      if (found) return found;
 
       const fallback = getNestedMessage(en, key);
-      if (typeof fallback === "string") return fallback;
+      if (fallback) return fallback;
 
-      return key;
+      return key; // show the key if missing translations
     };
 
     return { language, setLanguage, t };
   }, [language]);
 
-  return (
-    <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {
   const ctx = useContext(I18nContext);
-  if (!ctx) {
-    throw new Error("useI18n must be used within I18nProvider");
-  }
+  if (!ctx) throw new Error("useI18n must be used within I18nProvider");
   return ctx;
 }

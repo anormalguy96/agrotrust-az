@@ -1,4 +1,4 @@
-// agrotrust-az/src/i18n/az.ts
+import type { Messages } from "./types";
 
 export const az = {
   language: {
@@ -6,6 +6,7 @@ export const az = {
     labelShort: "AZ",
     labelLong: "Azərbaycan dili",
   },
+
   nav: {
     home: "Ana səhifə",
     howItWorks: "Platforma necə işləyir",
@@ -15,7 +16,113 @@ export const az = {
     contact: "Əlaqə",
     signIn: "Daxil ol",
     signUp: "Hesab yarat",
+    dashboard: "Panel",
+    settings: "Ayarlar",
+    signOut: "Çıxış",
   },
+
+  common: {
+    loading: "Yüklənir…",
+    save: "Yadda saxla",
+    saving: "Yadda saxlanılır…",
+    cancel: "Ləğv et",
+    back: "Geri",
+    edit: "Dəyiş",
+    update: "Yenilə",
+    delete: "Sil",
+    confirm: "Təsdiqlə",
+    close: "Bağla",
+    yes: "Bəli",
+    no: "Xeyr",
+    optional: "İstəyə bağlı",
+    required: "Mütləq",
+    search: "Axtar",
+    reset: "Sıfırla",
+  },
+
+  auth: {
+    signIn: {
+      title: "Daxil ol",
+      subtitle: "Hesabınıza daxil olun.",
+      email: "Email",
+      password: "Şifrə",
+      role: "Rol",
+      submit: "Daxil ol",
+      busy: "Daxil olunur…",
+      noAccount: "Hesabınız yoxdur?",
+      errorGeneric: "Daxil olmaq alınmadı. Yenidən cəhd edin.",
+    },
+    signUp: {
+      title: "Hesab yaradın",
+      subtitle: "Qeydiyyat Supabase ilə aparılır. Email təsdiqi tələb oluna bilər.",
+      role: "Rol",
+      name: "Ad və soyad",
+      organisation: "Təşkilat (istəyə bağlı)",
+      email: "Email",
+      phone: "Telefon (istəyə bağlı)",
+      password: "Şifrə",
+      submit: "Hesab yarat",
+      busy: "Hesab yaradılır…",
+      haveAccount: "Artıq hesabım var",
+      passwordMin: "Şifrə minimum uzunluğa malik olmalıdır.",
+      profileHint: "Daha dəqiq ölkə/şəhər/telefon Ayarlar bölməsində düzəldilir.",
+      errorGeneric: "Qeydiyyat alınmadı. Yenidən cəhd edin.",
+    },
+    verifyEmail: {
+      title: "Email təsdiqi",
+      subtitle: "Emailinizə göndərilən birdəfəlik kodu daxil edin.",
+      codeLabel: "Təsdiq kodu",
+      codePlaceholder: "6 rəqəmli kod",
+      submit: "Təsdiqlə",
+      verifying: "Yoxlanılır…",
+      verified: "Təsdiqləndi. Panelə yönləndirilir…",
+      backToSignIn: "Daxil ol səhifəsinə qayıt",
+      noCodeHint: "Kod gəlməyibsə Spam bölməsini yoxlayın.",
+      errorGeneric: "Təsdiqləmə alınmadı. Yenidən yoxlayın.",
+    },
+  },
+
+  dashboard: {
+    overview: { kicker: "İcmal", title: "Ümumi baxış" },
+    lots: { kicker: "İzlənə bilənlik", title: "Partiyalar (Lots)" },
+    rfqs: { kicker: "Bazar", title: "RFQ-lər" },
+    contracts: { kicker: "Ödəniş güvəni", title: "Müqavilələr və Escrow" },
+    settings: { kicker: "Profil", title: "Ayarlar" },
+  },
+
+  settings: {
+    account: {
+      title: "Hesab",
+      subtitle: "Hesab məlumatlarınızı görün.",
+      name: "Ad",
+      email: "Email",
+      role: "Rol",
+    },
+    profile: {
+      title: "Profil",
+      subtitle: "Şəxsi və təşkilat məlumatlarını yeniləyin.",
+      fullName: "Tam ad",
+      companyName: "Şirkət / Kooperativ adı",
+      country: "Ölkə",
+      city: "Şəhər",
+      phone: "Telefon",
+      phonePrefix: "Kod",
+      phoneNumber: "Nömrə",
+      saveProfile: "Profili yadda saxla",
+      saved: "Profil yadda saxlanıldı.",
+    },
+    ui: {
+      title: "İnterfeys",
+      subtitle: "Bu brauzer üçün UI seçimləri.",
+      denseTables: "Sıx cədvəllər",
+      showDemoHints: "Demo ipuclarını göstər",
+      savePrefs: "Seçimləri yadda saxla",
+      resetPrefs: "Sıfırla",
+      savedPrefs: "Seçimlər bu brauzerdə yadda saxlanıldı.",
+      resetDone: "Seçimlər sıfırlandı.",
+    },
+  },
+
   footer: {
     tagline: "İzlənə bilənlik • Keyfiyyət • İxrac etibarı",
     howItWorks: "Platforma necə işləyir",
@@ -23,4 +130,11 @@ export const az = {
     contact: "Əlaqə",
     copyright: "Hakaton üçün MVP.",
   },
-} as const;
+
+  errors: {
+    notFoundTitle: "Səhifə tapılmadı",
+    notFoundSubtitle: "Bu link mövcud deyil və ya silinib.",
+    forbiddenTitle: "Giriş qadağandır",
+    forbiddenSubtitle: "Bu səhifəyə daxil olmaq üçün icazəniz yoxdur.",
+  },
+} satisfies Messages;
