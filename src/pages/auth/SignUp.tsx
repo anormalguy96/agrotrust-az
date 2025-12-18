@@ -8,6 +8,8 @@ import { supabase } from "@/lib/supabaseClient";
 
 type UserRole = "cooperative" | "buyer" | "admin";
 
+const MIN_PASSWORD_LEN = 8; // ✅ match Supabase (default is usually 8)
+
 function digitsOnly(v: string) {
   return (v || "").replace(/[^\d]/g, "");
 }
@@ -22,7 +24,7 @@ export function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Keep phone optional here; full country/city selection lives in Settings (CSC UI)
+  // optional
   const [phoneCountry, setPhoneCountry] = useState("+994");
   const [phoneNumber, setPhoneNumber] = useState("");
 
@@ -39,7 +41,7 @@ export function SignUp() {
     return (
       name.trim().length > 0 &&
       email.trim().length > 0 &&
-      password.trim().length >= 6 &&
+      password.trim().length >= MIN_PASSWORD_LEN &&
       !busy
     );
   }, [name, email, password, busy]);
@@ -54,19 +56,19 @@ export function SignUp() {
 
     if (!cleanedName) return setError("Please enter your name.");
     if (!cleanedEmail) return setError("Please enter your email.");
-    if (cleanedPassword.length < 6) return setError("Password must be at least 6 characters.");
+    if (cleanedPassword.length < MIN_PASSWORD_LEN) {
+      return setError(`Password must be at least ${MIN_PASSWORD_LEN} characters.`);
+    }
 
     const [firstName, ...rest] = cleanedName.split(" ").filter(Boolean);
     const lastName = rest.join(" ") || firstName;
 
     setBusy(true);
     try {
-      // 1) Supabase Auth signUp
       const { data, error: signErr } = await supabase.auth.signUp({
         email: cleanedEmail,
         password: cleanedPassword,
         options: {
-          // Keep metadata light. Profile fields go to `profiles` via Netlify Function.
           data: {
             first_name: firstName,
             last_name: lastName,
@@ -77,12 +79,9 @@ export function SignUp() {
 
       if (signErr) throw new Error(signErr.message);
 
-      // Supabase returns a user id even when email confirmation is required.
       const appUserId = String(data.user?.id ?? "").trim();
 
-      // 2) Initialize / upsert profile row (server-side, service role)
-      // IMPORTANT: We write by `app_user_id` (text), NOT by `profiles.id` (uuid).
-      // This works for both UUID ids and demo ids like "user-xxxx".
+      // Initialize profile (best-effort)
       if (appUserId) {
         const calling = digitsOnly(phoneCountry);
         const national = digitsOnly(phoneNumber);
@@ -92,7 +91,7 @@ export function SignUp() {
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
           body: JSON.stringify({
-            userId: appUserId, // <-- becomes profiles.app_user_id
+            userId: appUserId,
             fullName: cleanedName,
             companyName: organisation.trim() || null,
             phoneCountryCallingCode: calling || null,
@@ -100,30 +99,30 @@ export function SignUp() {
           }),
         });
 
-        // Don’t block account creation if profile init fails; Settings can still work.
         if (!res.ok) {
           const text = await res.text().catch(() => "");
-          let msg = "Profile initialization failed.";
-          try {
-            const j = JSON.parse(text || "{}");
-            msg = j?.details || j?.error || msg;
-          } catch {
-            if (text) msg = text;
-          }
-          // For MVP, show a warning but still send user to sign-in.
-          console.warn("profile-update failed:", msg);
+          console.warn("profile-update failed:", text);
         }
       }
 
-      // 3) Send user to Sign In (email confirmation may be required)
-      navigate(ROUTES.AUTH.SIGN_IN, {
-        replace: true,
-        state: {
-          from: { pathname: ROUTES.DASHBOARD.OVERVIEW },
-          justSignedUp: true,
-          email: cleanedEmail,
-        },
-      });
+      // ✅ If email confirmation is required -> session is usually null
+      const needsEmailConfirmation = !data.session;
+
+      if (needsEmailConfirmation) {
+        navigate(ROUTES.AUTH.VERIFY_EMAIL, {
+          replace: true,
+          state: {
+            email: cleanedEmail,
+            organisation: organisation.trim() || undefined,
+            role,
+            name: cleanedName,
+          },
+        });
+        return;
+      }
+
+      // If confirmations are OFF -> session exists -> user is already signed in
+      navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-up failed. Please try again.");
     } finally {
@@ -138,7 +137,7 @@ export function SignUp() {
           <p className="auth-kicker">Create your account</p>
           <h1 className="auth-title">Join {BRAND.productName}</h1>
           <p className="muted auth-subtitle">
-            Sign-up uses Supabase authentication. You may need to confirm your email before signing in.
+            You may need to confirm your email before signing in.
           </p>
 
           <form onSubmit={handleSubmit} className="auth-form">
@@ -207,6 +206,7 @@ export function SignUp() {
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="50 123 45 67"
                   inputMode="tel"
+                  autoComplete="tel-national"
                 />
               </div>
             </label>
@@ -218,9 +218,12 @@ export function SignUp() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Choose a password"
+                placeholder={`At least ${MIN_PASSWORD_LEN} characters`}
                 autoComplete="new-password"
               />
+              <div className="muted" style={{ fontSize: "var(--fs-1)", marginTop: 6 }}>
+                Minimum length: {MIN_PASSWORD_LEN}.
+              </div>
             </label>
 
             {error && <div className="auth-alert auth-alert--error">{error}</div>}
