@@ -201,16 +201,6 @@ function Home() {
               <p className="home-hero__eyebrow">
                 {tr("marketing.home.eyebrow", fb.eyebrow)}
               </p>
-
-              <button
-                type="button"
-                className="btn btn--ghost home-lang"
-                onClick={toggleLanguage}
-                aria-label="Switch language"
-                title="Switch language"
-              >
-                {language === "en" ? "AZ" : "EN"}
-              </button>
             </div>
 
             <h1 className="home-hero__title">{BRAND.productName}</h1>
