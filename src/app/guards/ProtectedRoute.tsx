@@ -1,68 +1,124 @@
-// agrotrust-az/src/app/guards/ProtectedRoute.tsx
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { supabase } from "@/lib/supabaseClient";
 
-import { useContext, type ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+export type UserRole = "cooperative" | "buyer" | "admin";
 
-import { ROUTES } from "@/app/config/routes";
-import { AuthContext, type UserRole } from "@/app/providers/AuthProvider";
-
-type Props = {
-  children: ReactNode;
-
-  /**
-   * Optional role-based gate for future expansion.
-   * If omitted, any authenticated user can pass.
-   */
-  allowedRoles?: UserRole[];
-
-  /**
-   * Optional override for where unauthenticated users go.
-   */
-  redirectTo?: string;
+export type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
 };
 
-/**
- * ProtectedRoute
- *
- * A lightweight guard for the dashboard and any future protected areas.
- * Uses the AuthProvider's mock auth state for the hackathon MVP.
- */
-export function ProtectedRoute({
-  children,
-  allowedRoles,
-  redirectTo = ROUTES.AUTH.SIGN_IN
-}: Props) {
-  const location = useLocation();
-  const ctx = useContext(AuthContext);
+type AuthContextValue = {
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  signOut: () => Promise<void>;
+  getRoleLabel: (role?: UserRole) => string;
+};
 
-  if (!ctx) {
-    // If this triggers, the app is missing <AuthProvider> in main.tsx.
-    throw new Error("AuthContext not found. Ensure AuthProvider wraps the app.");
-  }
+export const AuthContext = createContext<AuthContextValue | undefined>(
+  undefined
+);
 
-  const { isLoading, isAuthenticated, user } = ctx;
+type Props = { children: ReactNode };
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: 24 }}>
-        <p>Loading session…</p>
-      </div>
-    );
-  }
+function normalizeRole(role: unknown): UserRole {
+  const r = String(role ?? "").toLowerCase();
+  if (r === "admin") return "admin";
+  if (r === "buyer") return "buyer";
+  return "cooperative";
+}
 
-  if (!isAuthenticated || !user) {
-    return (
-      <Navigate
-        to={redirectTo}
-        replace
-        state={{ from: location.pathname }}
-      />
-    );
-  }
+async function fetchProfileUser(): Promise<AuthUser | null> {
+  const { data: authData } = await supabase.auth.getUser();
+  const u = authData.user;
+  if (!u) return null;
 
-  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/forbidden" replace />;
-  }
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, full_name, first_name, last_name, company_name, email")
+    .eq("id", u.id)
+    .single();
 
-  return <>{children}</>;
+  const role = normalizeRole(profile?.role);
+
+  const name =
+    String(profile?.full_name ?? "").trim() ||
+    `${String(profile?.first_name ?? "").trim()} ${String(profile?.last_name ?? "").trim()}`.trim() ||
+    String(profile?.company_name ?? "").trim() ||
+    (u.email ? u.email.split("@")[0] : "User");
+
+  return {
+    id: u.id,
+    email: String(profile?.email ?? u.email ?? ""),
+    name,
+    role,
+  };
+}
+
+export function AuthProvider({ children }: Props) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const built = await fetchProfileUser();
+        if (alive) setUser(built);
+      } finally {
+        if (alive) setIsLoading(false);
+      }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
+      const built = await fetchProfileUser();
+      if (alive) setUser(built);
+    });
+
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  }, []);
+
+  const getRoleLabel = useCallback((role?: UserRole) => {
+    switch (role) {
+      case "buyer":
+        return "Buyer";
+      case "admin":
+        return "Admin";
+      case "cooperative":
+      default:
+        return "Cooperative";
+    }
+  }, []);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      isAuthenticated: Boolean(user),
+      isLoading,
+      signOut,
+      getRoleLabel,
+    }),
+    [user, isLoading, signOut, getRoleLabel]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
