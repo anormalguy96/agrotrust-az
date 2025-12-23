@@ -1,5 +1,3 @@
-// src/app/guards/ProtectedRoute.tsx
-
 import { useContext, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
