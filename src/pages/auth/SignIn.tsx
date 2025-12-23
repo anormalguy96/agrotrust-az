@@ -1,5 +1,3 @@
-// src/pages/auth/SignIn.tsx
-
 import { FormEvent, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -44,7 +42,6 @@ export function SignIn() {
         return;
       }
 
-      // Optional: verify profile exists (helps catch RLS issues early)
       const userId = data.user?.id;
       if (!userId) {
         setError("Sign-in succeeded but session user is missing.");
@@ -62,9 +59,6 @@ export function SignIn() {
         setError("Signed in, but profile could not be loaded (RLS/policy issue).");
         return;
       }
-
-      // Important: DO NOT set local mock auth user here.
-      // AuthProvider should react to Supabase session changes.
 
       navigate(from, { replace: true });
     } catch (err) {
