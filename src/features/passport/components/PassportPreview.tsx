@@ -14,7 +14,6 @@ import { Card } from "@/components/common/Card";
 import { Badge } from "@/components/common/Badge";
 import { ROUTES, lotDetailsPath } from "@/app/config/routes";
 
-import "./PassportPreview.css";
 import { PassportChemLabSection } from "../PassportChemLabSection";
 import { PassportQR } from "./PassportQR";
 import { createPassport, verifyPassport } from "../api/passportApi";
