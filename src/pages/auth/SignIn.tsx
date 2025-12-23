@@ -1,12 +1,19 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState, useContext } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "@/app/config/routes";
-import { supabase } from "@/lib/supabaseClient";
+import { AuthContext } from "@/app/providers/AuthProvider";
 
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
+  const ctx = useContext(AuthContext);
+
+  if (!ctx) {
+    throw new Error("AuthContext not found. Ensure AuthProvider wraps the app.");
+  }
+
+  const { signIn } = ctx;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,25 +40,15 @@ export function SignIn() {
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const cleanPassword = password; // DON'T trim passwords (spaces can be valid)
+      const cleanPassword = password; // don't trim passwords
 
       if (!cleanEmail || !cleanPassword) {
         setError("Email and password are required.");
         return;
       }
 
-      const { error: signErr } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
+      await signIn({ email: cleanEmail, password: cleanPassword });
 
-      if (signErr) {
-        setError(signErr.message);
-        return;
-      }
-
-      // Do NOT query profiles here.
-      // AuthProvider should react to the Supabase session change and load profile/role.
       navigate(from, { replace: true });
     } catch (err) {
       console.error(err);
@@ -103,14 +100,7 @@ export function SignIn() {
               </div>
             )}
 
-            <div
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                alignItems: "center",
-                marginTop: "0.75rem",
-              }}
-            >
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "0.75rem" }}>
               <button type="submit" className="btn btn--primary" disabled={submitting}>
                 {submitting ? "Signing in…" : "Sign in"}
               </button>
