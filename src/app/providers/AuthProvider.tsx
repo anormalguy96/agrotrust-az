@@ -1,3 +1,5 @@
+// src/app/providers/AuthProvider.tsx
+
 import {
   createContext,
   useCallback,
@@ -15,8 +17,6 @@ export type AuthUser = {
   name: string;
   email: string;
   role: UserRole;
-  cooperativeId?: string;
-  coopId?: string;
 };
 
 type SignInInput = {
@@ -33,9 +33,7 @@ type AuthContextValue = {
   getRoleLabel: (role?: UserRole) => string;
 };
 
-export const AuthContext = createContext<AuthContextValue | undefined>(
-  undefined
-);
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 type Props = { children: ReactNode };
 
@@ -46,32 +44,39 @@ function normalizeRole(role: unknown): UserRole {
   return "cooperative";
 }
 
-async function fetchProfileUser(): Promise<AuthUser | null> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const session = sessionData.session;
-  if (!session?.user) return null;
+function minimalUserFromAuth(u: { id: string; email?: string | null }): AuthUser {
+  const role: UserRole = "cooperative";
+  const email = String(u.email ?? "");
+  return {
+    id: u.id,
+    email,
+    name: email ? email.split("@")[0] : "User",
+    role,
+  };
+}
 
-  const u = session.user;
+async function hydrateFromProfile(u: { id: string; email?: string | null }): Promise<AuthUser> {
+  const minimal = minimalUserFromAuth(u);
 
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("role, full_name, first_name, last_name, company_name, email")
     .eq("id", u.id)
     .maybeSingle();
 
-  const role = normalizeRole(profile?.role);
+  // If RLS blocks or profile missing, keep minimal (don’t break auth)
+  if (error || !profile) return minimal;
 
+  const role = normalizeRole(profile.role);
   const name =
-    String(profile?.full_name ?? "").trim() ||
-    `${String(profile?.first_name ?? "").trim()} ${String(
-      profile?.last_name ?? ""
-    ).trim()}`.trim() ||
-    String(profile?.company_name ?? "").trim() ||
-    (u.email ? u.email.split("@")[0] : "User");
+    String(profile.full_name ?? "").trim() ||
+    `${String(profile.first_name ?? "").trim()} ${String(profile.last_name ?? "").trim()}`.trim() ||
+    String(profile.company_name ?? "").trim() ||
+    minimal.name;
 
   return {
     id: u.id,
-    email: String(profile?.email ?? u.email ?? ""),
+    email: String(profile.email ?? u.email ?? minimal.email),
     name,
     role,
   };
@@ -84,18 +89,39 @@ export function AuthProvider({ children }: Props) {
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    const boot = async () => {
       try {
-        const built = await fetchProfileUser();
-        if (alive) setUser(built);
+        const { data } = await supabase.auth.getSession();
+        const u = data.session?.user;
+
+        if (u && alive) {
+          // set minimal immediately, then hydrate
+          setUser(minimalUserFromAuth(u));
+          const full = await hydrateFromProfile(u);
+          if (alive) setUser(full);
+        }
       } finally {
         if (alive) setIsLoading(false);
       }
-    })();
+    };
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
-      const built = await fetchProfileUser();
-      if (alive) setUser(built);
+    void boot();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!alive) return;
+
+      // ✅ Only clear user when truly signed out
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setUser(null);
+        return;
+      }
+
+      const u = session.user;
+
+      // ✅ Never wipe user during sign-in; set minimal, then hydrate
+      setUser((prev) => prev ?? minimalUserFromAuth(u));
+      const full = await hydrateFromProfile(u);
+      if (alive) setUser(full);
     });
 
     return () => {
@@ -105,37 +131,20 @@ export function AuthProvider({ children }: Props) {
   }, []);
 
   const signIn = useCallback(async (input: SignInInput): Promise<AuthUser> => {
-    const email = input.email?.trim().toLowerCase();
-    const password = input.password;
+    const email = input.email.trim().toLowerCase();
+    const password = input.password; // don't trim
 
     if (!email || !password) throw new Error("Email and password are required.");
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
     const u = data.user;
     if (!u) throw new Error("Sign-in succeeded but missing user.");
 
-    const minimalRole: UserRole = "cooperative";
-
-    const minimalUser: AuthUser = {
-      id: u.id,
-      email: u.email ?? email,
-      name: u.email ? u.email.split("@")[0] : "User",
-      role: minimalRole,
-    };
-
-    setUser(minimalUser);
-
-    void (async () => {
-      const built = await fetchProfileUser();
-      if (built) setUser(built);
-    })();
-
-    return minimalUser;
+    const minimal = minimalUserFromAuth(u);
+    setUser(minimal); // immediate
+    return minimal;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -149,7 +158,6 @@ export function AuthProvider({ children }: Props) {
         return "Buyer";
       case "admin":
         return "Admin";
-      case "cooperative":
       default:
         return "Cooperative";
     }
