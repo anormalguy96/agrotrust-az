@@ -9,4 +9,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-(window as any).supabase = supabase;
+if (import.meta.env.VITE_DEBUG_SUPABASE === "true") {
+  (window as any).supabase = supabase;
+}

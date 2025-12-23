@@ -15,26 +15,28 @@ export function SignIn() {
   const [error, setError] = useState<string | null>(null);
 
   const from = useMemo(() => {
-    const st: any = location.state;
-    const f = st?.from;
-    if (typeof f === "string" && f.trim()) return f;
-    if (f?.pathname) return f.pathname;
+    const s = location.state as any;
+    const f = s?.from;
+
+    if (typeof f === "string") return f;
+    if (f?.pathname) return f.pathname as string;
+
     return ROUTES.DASHBOARD.OVERVIEW;
   }, [location.state]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (submitting) return;
-
     setError(null);
     setSubmitting(true);
 
     try {
-      await signIn({
-        email: email.trim().toLowerCase(),
-        password, // don't trim
-      });
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail || !password) {
+        setError("Email and password are required.");
+        return;
+      }
 
+      await signIn({ email: cleanEmail, password });
       navigate(from, { replace: true });
     } catch (err) {
       console.error(err);
