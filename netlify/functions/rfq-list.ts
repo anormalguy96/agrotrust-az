@@ -15,12 +15,17 @@ function toNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+const jsonHeaders = (extra?: Record<string, string>) => ({
+  "Content-Type": "application/json",
+  ...(extra ?? {}),
+});
+
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod !== "GET") {
       return {
         statusCode: 405,
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         body: JSON.stringify({ error: "Method not allowed" }),
       };
     }
@@ -39,13 +44,18 @@ export const handler: Handler = async (event) => {
       if (role === "buyer") q = q.eq("buyer_id", userId);
       else if (role === "cooperative") q = q.eq("cooperative_id", userId);
       else if (role === "admin") {
-        
+        // no filter = admin sees all
       } else {
         q = q.eq("created_by", userId);
       }
     }
 
-    if (status === "draft" || status === "sent" || status === "answered" || status === "closed") {
+    if (
+      status === "draft" ||
+      status === "sent" ||
+      status === "answered" ||
+      status === "closed"
+    ) {
       q = q.eq("status", status);
     }
 
@@ -55,7 +65,7 @@ export const handler: Handler = async (event) => {
       console.error("rfq-list supabase error:", error);
       return {
         statusCode: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: jsonHeaders(),
         body: JSON.stringify({ error: "DB_ERROR", message: error.message }),
       };
     }
@@ -77,26 +87,26 @@ export const handler: Handler = async (event) => {
       product_name: String(r.product_name ?? r.product ?? "").trim(),
 
       quantity_kg: toNumber(r.quantity_kg),
-      target_price_per_kg: r.target_price_per_kg === null ? null : toNumber(r.target_price_per_kg),
+      target_price_per_kg:
+        r.target_price_per_kg === null ? null : toNumber(r.target_price_per_kg),
       region_preference: r.region_preference ?? null,
 
-      preferred_certifications: Array.isArray(r.preferred_certifications) ? r.preferred_certifications : [],
+      preferred_certifications: Array.isArray(r.preferred_certifications)
+        ? r.preferred_certifications
+        : [],
       notes: r.notes ?? null,
     }));
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store",
-      },
+      headers: jsonHeaders({ "Cache-Control": "no-store" }),
       body: JSON.stringify(out),
     };
   } catch (err) {
     console.error("rfq-list unexpected error:", err);
     return {
       statusCode: 500,
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ error: "Unexpected error listing RFQs" }),
     };
   }
