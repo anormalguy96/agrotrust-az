@@ -48,32 +48,32 @@ function normalizeRole(role: any): UserRole {
   return "cooperative";
 }
 
-async function buildUserFromSession(): Promise<AuthUser | null> {
-  const { data: authData } = await supabase.auth.getUser();
-  const u = authData.user;
-  if (!u) return null;
+async function fetchProfileUser(): Promise<AuthUser | null> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const session = sessionData.session;
+  if (!session?.user) return null;
 
-  const { data: profile, error } = await supabase
+  const u = session.user;
+
+  const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name, first_name, last_name, company_name")
+    .select("role, full_name, first_name, last_name, company_name, email")
     .eq("id", u.id)
-    .single();
+    .maybeSingle();
 
   const role = normalizeRole(profile?.role);
 
   const name =
-    profile?.full_name?.trim() ||
-    `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ||
-    profile?.company_name?.trim() ||
-    u.email?.split("@")[0] ||
-    "User";
+    String(profile?.full_name ?? "").trim() ||
+    `${String(profile?.first_name ?? "").trim()} ${String(profile?.last_name ?? "").trim()}`.trim() ||
+    String(profile?.company_name ?? "").trim() ||
+    (u.email ? u.email.split("@")[0] : "User");
 
   return {
     id: u.id,
-    email: u.email ?? "",
+    email: String(profile?.email ?? u.email ?? ""),
     name,
     role,
-    cooperativeId: u.id,
   };
 }
 
@@ -86,7 +86,7 @@ export function AuthProvider({ children }: Props) {
 
     (async () => {
       try {
-        const built = await buildUserFromSession();
+        const built = await fetchProfileUser();
         if (alive) setUser(built);
       } finally {
         if (alive) setIsLoading(false);
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: Props) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async () => {
-      const built = await buildUserFromSession();
+      const built = await fetchProfileUser();
       if (alive) setUser(built);
     });
 
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: Props) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
-    const built = await buildUserFromSession();
+    const built = await fetchProfileUser();
     if (!built) throw new Error("Sign-in succeeded but no user session found.");
 
     setUser(built);

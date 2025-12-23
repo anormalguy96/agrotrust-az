@@ -15,24 +15,32 @@ export function SignIn() {
   const [error, setError] = useState<string | null>(null);
 
   const from = useMemo(() => {
-    return (location.state as any)?.from?.pathname || ROUTES.DASHBOARD.OVERVIEW;
+    const st: any = location.state;
+    const f = st?.from;
+
+    if (typeof f === "string" && f.trim()) return f;
+    if (f?.pathname) return f.pathname;
+
+    return ROUTES.DASHBOARD.OVERVIEW;
   }, [location.state]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submitting) return;
+
     setError(null);
     setSubmitting(true);
 
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const cleanPassword = password.trim();
+      const cleanPassword = password; // DON'T trim passwords (spaces can be valid)
 
       if (!cleanEmail || !cleanPassword) {
         setError("Email and password are required.");
         return;
       }
 
-      const { data, error: signErr } = await supabase.auth.signInWithPassword({
+      const { error: signErr } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
@@ -42,24 +50,8 @@ export function SignIn() {
         return;
       }
 
-      const userId = data.user?.id;
-      if (!userId) {
-        setError("Sign-in succeeded but session user is missing.");
-        return;
-      }
-
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", userId)
-        .single();
-
-      if (profErr) {
-        console.error("Profile load failed:", profErr);
-        setError("Signed in, but profile could not be loaded (RLS/policy issue).");
-        return;
-      }
-
+      // Do NOT query profiles here.
+      // AuthProvider should react to the Supabase session change and load profile/role.
       navigate(from, { replace: true });
     } catch (err) {
       console.error(err);
