@@ -1,10 +1,12 @@
-import { createBrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
 import { AdminOnlyRoute } from "@/components/AdminOnlyRoute";
-import EscrowInit from "@/pages/dashboard/EscrowInit";
+
 import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
+
+import BuyerPassport from "@/pages/buyers/BuyerPassport";
 
 import { Home } from "@/pages/marketing/Home";
 import { HowItWorks } from "@/pages/marketing/HowItWorks";
@@ -28,13 +30,12 @@ import { RFQs } from "@/pages/dashboard/RFQs";
 import { Contracts } from "@/pages/dashboard/Contracts";
 import { Settings } from "@/pages/dashboard/Settings";
 
+import EscrowInit from "@/pages/dashboard/EscrowInit";
 import { AdminUsers } from "@/pages/dashboard/AdminUsers";
 import { Analytics } from "@/pages/dashboard/Analytics";
 
 import { NotFound } from "@/pages/errors/NotFound";
 import { Forbidden } from "@/pages/errors/Forbidden";
-
-<Route path="/dashboard/escrow/init" element={<EscrowInit />} />
 
 export const router = createBrowserRouter([
   {
@@ -50,7 +51,9 @@ export const router = createBrowserRouter([
       { path: ROUTES.AUTH.SIGN_IN, element: <SignIn /> },
       { path: ROUTES.AUTH.SIGN_UP, element: <SignUp /> },
       { path: ROUTES.AUTH.VERIFY_EMAIL, element: <VerifyEmail /> },
-      { path: ROUTES.AUTH.CALLBACK, element: <AuthCallback /> },
+
+      { path: "/auth/callback", element: <AuthCallback /> },
+      { path: "/buyers/passport", element: <BuyerPassport /> },
     ],
   },
 
@@ -74,6 +77,8 @@ export const router = createBrowserRouter([
       { path: ROUTES.DASHBOARD.CONTRACTS, element: <Contracts /> },
       { path: ROUTES.DASHBOARD.SETTINGS, element: <Settings /> },
 
+      { path: "/dashboard/escrow/init", element: <EscrowInit /> },
+
       {
         path: ROUTES.DASHBOARD.ADMIN_USERS,
         element: (
@@ -93,7 +98,8 @@ export const router = createBrowserRouter([
     ],
   },
 
-  { path: ROUTES.FORBIDDEN, element: <Forbidden /> },
+  { path: "/forbidden", element: <Forbidden /> },
+
   { path: "/dashboard/admin", element: <Navigate to={ROUTES.DASHBOARD.ADMIN_USERS} replace /> },
 
   { path: "*", element: <NotFound /> },
