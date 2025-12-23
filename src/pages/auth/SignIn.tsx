@@ -1,33 +1,24 @@
-import { FormEvent, useMemo, useState, useContext } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "@/app/config/routes";
-import { AuthContext } from "@/app/providers/AuthProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const ctx = useContext(AuthContext);
-
-  if (!ctx) {
-    throw new Error("AuthContext not found. Ensure AuthProvider wraps the app.");
-  }
-
-  const { signIn } = ctx;
+  const { signIn } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const from = useMemo(() => {
     const st: any = location.state;
     const f = st?.from;
-
     if (typeof f === "string" && f.trim()) return f;
     if (f?.pathname) return f.pathname;
-
     return ROUTES.DASHBOARD.OVERVIEW;
   }, [location.state]);
 
@@ -39,15 +30,10 @@ export function SignIn() {
     setSubmitting(true);
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      const cleanPassword = password; // don't trim passwords
-
-      if (!cleanEmail || !cleanPassword) {
-        setError("Email and password are required.");
-        return;
-      }
-
-      await signIn({ email: cleanEmail, password: cleanPassword });
+      await signIn({
+        email: email.trim().toLowerCase(),
+        password, // don't trim
+      });
 
       navigate(from, { replace: true });
     } catch (err) {

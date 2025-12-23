@@ -1,5 +1,3 @@
-// src/app/providers/AuthProvider.tsx
-
 import {
   createContext,
   useCallback,
@@ -41,7 +39,7 @@ export const AuthContext = createContext<AuthContextValue | undefined>(
 
 type Props = { children: ReactNode };
 
-function normalizeRole(role: any): UserRole {
+function normalizeRole(role: unknown): UserRole {
   const r = String(role ?? "").toLowerCase();
   if (r === "admin") return "admin";
   if (r === "buyer") return "buyer";
@@ -65,7 +63,9 @@ async function fetchProfileUser(): Promise<AuthUser | null> {
 
   const name =
     String(profile?.full_name ?? "").trim() ||
-    `${String(profile?.first_name ?? "").trim()} ${String(profile?.last_name ?? "").trim()}`.trim() ||
+    `${String(profile?.first_name ?? "").trim()} ${String(
+      profile?.last_name ?? ""
+    ).trim()}`.trim() ||
     String(profile?.company_name ?? "").trim() ||
     (u.email ? u.email.split("@")[0] : "User");
 
@@ -104,20 +104,38 @@ export function AuthProvider({ children }: Props) {
     };
   }, []);
 
-  const signIn = useCallback(async (input: SignInInput) => {
+  const signIn = useCallback(async (input: SignInInput): Promise<AuthUser> => {
     const email = input.email?.trim().toLowerCase();
-    const password = input.password.trim();
+    const password = input.password;
 
     if (!email || !password) throw new Error("Email and password are required.");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) throw error;
 
-    const built = await fetchProfileUser();
-    if (!built) throw new Error("Sign-in succeeded but no user session found.");
+    const u = data.user;
+    if (!u) throw new Error("Sign-in succeeded but missing user.");
 
-    setUser(built);
-    return built;
+    const minimalRole: UserRole = "cooperative";
+
+    const minimalUser: AuthUser = {
+      id: u.id,
+      email: u.email ?? email,
+      name: u.email ? u.email.split("@")[0] : "User",
+      role: minimalRole,
+    };
+
+    setUser(minimalUser);
+
+    void (async () => {
+      const built = await fetchProfileUser();
+      if (built) setUser(built);
+    })();
+
+    return minimalUser;
   }, []);
 
   const signOut = useCallback(async () => {
