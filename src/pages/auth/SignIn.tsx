@@ -1,22 +1,14 @@
+// src/pages/auth/SignIn.tsx
+
 import { FormEvent, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "@/app/config/routes";
-import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabaseClient";
-
-type UiUser = {
-  id: string;
-  email: string;
-  role: "cooperative" | "buyer" | "admin";
-  firstName?: string;
-  lastName?: string;
-};
 
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const auth = useAuth() as any;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,10 +26,17 @@ export function SignIn() {
     setSubmitting(true);
 
     try {
-      // 1) Sign in with Supabase Auth (REAL session)
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPassword = password.trim();
+
+      if (!cleanEmail || !cleanPassword) {
+        setError("Email and password are required.");
+        return;
+      }
+
       const { data, error: signErr } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+        email: cleanEmail,
+        password: cleanPassword,
       });
 
       if (signErr) {
@@ -45,45 +44,27 @@ export function SignIn() {
         return;
       }
 
-      const user = data.user;
-      if (!user) {
-        setError("Sign-in failed: missing user.");
+      // Optional: verify profile exists (helps catch RLS issues early)
+      const userId = data.user?.id;
+      if (!userId) {
+        setError("Sign-in succeeded but session user is missing.");
         return;
       }
 
-      // 2) Load profile (role/name) for UI
-      const { data: profile, error: profErr } = await supabase
+      const { error: profErr } = await supabase
         .from("profiles")
-        .select("id, email, first_name, last_name, role")
-        .eq("id", user.id)
+        .select("id")
+        .eq("id", userId)
         .single();
 
-      // If profiles table is not ready / RLS blocks select, still allow sign-in
-      // but UI role/name might be unknown.
-      let uiUser: UiUser = {
-        id: user.id,
-        email: user.email ?? email.trim(),
-        role: "cooperative",
-      };
-
-      if (!profErr && profile) {
-        uiUser = {
-          id: profile.id,
-          email: profile.email,
-          firstName: profile.first_name ?? undefined,
-          lastName: profile.last_name ?? undefined,
-          role:
-            profile.role === "admin"
-              ? "admin"
-              : profile.role === "buyer"
-              ? "buyer"
-              : "cooperative",
-        };
+      if (profErr) {
+        console.error("Profile load failed:", profErr);
+        setError("Signed in, but profile could not be loaded (RLS/policy issue).");
+        return;
       }
 
-      // 3) Keep your existing UI auth hook working
-      if (typeof auth?.setUser === "function") auth.setUser(uiUser);
-      else if (typeof auth?.signIn === "function") auth.signIn(uiUser);
+      // Important: DO NOT set local mock auth user here.
+      // AuthProvider should react to Supabase session changes.
 
       navigate(from, { replace: true });
     } catch (err) {
@@ -100,7 +81,7 @@ export function SignIn() {
         <div className="card" style={{ maxWidth: 520, margin: "0 auto" }}>
           <h1 className="dash-title">Sign in to AgroTrust AZ</h1>
           <p className="muted" style={{ marginBottom: "1.5rem" }}>
-            This uses real Supabase authentication.
+            Sign in with your email and password.
           </p>
 
           <form onSubmit={handleSubmit} className="stack stack--md" noValidate>
@@ -136,7 +117,14 @@ export function SignIn() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                alignItems: "center",
+                marginTop: "0.75rem",
+              }}
+            >
               <button type="submit" className="btn btn--primary" disabled={submitting}>
                 {submitting ? "Signing in…" : "Sign in"}
               </button>
