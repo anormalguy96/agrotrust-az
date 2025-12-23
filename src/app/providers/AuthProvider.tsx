@@ -106,7 +106,7 @@ export function AuthProvider({ children }: Props) {
 
   const signIn = useCallback(async (input: SignInInput) => {
     const email = input.email?.trim().toLowerCase();
-    const password = input.password?.trim();
+    const password = input.password.trim();
 
     if (!email || !password) throw new Error("Email and password are required.");
 
