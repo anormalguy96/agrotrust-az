@@ -1,4 +1,4 @@
-// agrotrust-az/src/app/providers/AuthProvider.tsx
+// src/app/providers/AuthProvider.tsx
 
 import {
   createContext,
@@ -6,8 +6,9 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode
+  type ReactNode,
 } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export type UserRole = "cooperative" | "buyer" | "admin";
 
@@ -22,8 +23,7 @@ export type AuthUser = {
 
 type SignInInput = {
   email: string;
-  name?: string;
-  role?: UserRole;
+  password: string;
 };
 
 type AuthContextValue = {
@@ -31,95 +31,99 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isLoading: boolean;
   signIn: (input: SignInInput) => Promise<AuthUser>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
   getRoleLabel: (role?: UserRole) => string;
 };
 
-const STORAGE_KEY = "agrotrust.auth.user";
+export const AuthContext = createContext<AuthContextValue | undefined>(
+  undefined
+);
 
-export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+type Props = { children: ReactNode };
 
-type Props = {
-  children: ReactNode;
-};
+function normalizeRole(role: any): UserRole {
+  const r = String(role ?? "").toLowerCase();
+  if (r === "admin") return "admin";
+  if (r === "buyer") return "buyer";
+  return "cooperative";
+}
 
-/**
- * Hackathon MVP AuthProvider
- *
- * This is intentionally lightweight and mock-driven.
- * It persists a simple user object in localStorage.
- *
- * Later you can swap:
- * - signIn implementation
- * - storage model
- * - token handling
- * without changing consumer code.
- */
+async function buildUserFromSession(): Promise<AuthUser | null> {
+  const { data: authData } = await supabase.auth.getUser();
+  const u = authData.user;
+  if (!u) return null;
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("role, full_name, first_name, last_name, company_name")
+    .eq("id", u.id)
+    .single();
+
+  const role = normalizeRole(profile?.role);
+
+  const name =
+    profile?.full_name?.trim() ||
+    `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ||
+    profile?.company_name?.trim() ||
+    u.email?.split("@")[0] ||
+    "User";
+
+  return {
+    id: u.id,
+    email: u.email ?? "",
+    name,
+    role,
+    cooperativeId: u.id,
+  };
+}
+
 export function AuthProvider({ children }: Props) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as AuthUser;
-        if (parsed?.email && parsed?.role) {
-          setUser(parsed);
-        }
+    let alive = true;
+
+    (async () => {
+      try {
+        const built = await buildUserFromSession();
+        if (alive) setUser(built);
+      } finally {
+        if (alive) setIsLoading(false);
       }
-    } catch {
-      // ignore corrupted storage for MVP
-    } finally {
-      setIsLoading(false);
-    }
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async () => {
+      const built = await buildUserFromSession();
+      if (alive) setUser(built);
+    });
+
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  const persist = useCallback((u: AuthUser | null) => {
-    try {
-      if (!u) {
-        localStorage.removeItem(STORAGE_KEY);
-        return;
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-    } catch {
-      // ignore storage failures for MVP
-    }
+  const signIn = useCallback(async (input: SignInInput) => {
+    const email = input.email?.trim().toLowerCase();
+    const password = input.password?.trim();
+
+    if (!email || !password) throw new Error("Email and password are required.");
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+
+    const built = await buildUserFromSession();
+    if (!built) throw new Error("Sign-in succeeded but no user session found.");
+
+    setUser(built);
+    return built;
   }, []);
 
-  const signIn = useCallback(
-    async (input: SignInInput) => {
-      const email = input.email?.trim();
-      if (!email) {
-        throw new Error("Email is required.");
-      }
-
-      // Simple deterministic ID for demo consistency
-      const id = `user-${btoa(email).replace(/=+/g, "").slice(0, 12)}`;
-
-      const role: UserRole = input.role ?? "cooperative";
-      const name =
-        input.name?.trim() ||
-        (role === "buyer"
-          ? "Foreign Buyer"
-          : role === "admin"
-          ? "Platform Admin"
-          : "Cooperative Member");
-
-      const newUser: AuthUser = { id, name, email, role, cooperativeId: id };
-
-      setUser(newUser);
-      persist(newUser);
-
-      return newUser;
-    },
-    [persist]
-  );
-
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    persist(null);
-  }, [persist]);
+  }, []);
 
   const getRoleLabel = useCallback((role?: UserRole) => {
     switch (role) {
@@ -140,7 +144,7 @@ export function AuthProvider({ children }: Props) {
       isLoading,
       signIn,
       signOut,
-      getRoleLabel
+      getRoleLabel,
     }),
     [user, isLoading, signIn, signOut, getRoleLabel]
   );
