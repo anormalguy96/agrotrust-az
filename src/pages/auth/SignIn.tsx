@@ -7,36 +7,38 @@ import { useAuth } from "@/hooks/useAuth";
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn } = useAuth();
+  const auth = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const from = useMemo(() => {
-    const s = location.state as any;
-    const f = s?.from;
-
-    if (typeof f === "string") return f;
-    if (f?.pathname) return f.pathname as string;
-
+    const st: any = location.state;
+    const maybe = st?.from;
+    if (typeof maybe === "string") return maybe;
+    if (maybe?.pathname) return maybe.pathname;
     return ROUTES.DASHBOARD.OVERVIEW;
   }, [location.state]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password;
+
+    if (!cleanEmail || !cleanPassword) {
+      setError("Email and password are required.");
+      return;
+    }
+
     setSubmitting(true);
-
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      if (!cleanEmail || !password) {
-        setError("Email and password are required.");
-        return;
-      }
+      await auth.signIn({ email: cleanEmail, password: cleanPassword });
 
-      await signIn({ email: cleanEmail, password });
       navigate(from, { replace: true });
     } catch (err) {
       console.error(err);
