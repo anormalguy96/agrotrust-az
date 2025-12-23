@@ -33,7 +33,7 @@ export function ProtectedRoute({
   }
 
   if (!isAuthenticated || !user) {
-    return <Navigate to={redirectTo} replace state={{ from: location.pathname }} />;
+    return <Navigate to={redirectTo} replace state={{ from: location }} />;
   }
 
   if (allowedRoles?.length && !allowedRoles.includes(user.role)) {
