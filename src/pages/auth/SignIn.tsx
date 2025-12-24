@@ -15,15 +15,22 @@ export function SignIn() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const from = useMemo(() => {
+  const safeFrom = useMemo(() => {
+    const fallback = ROUTES.DASHBOARD.OVERVIEW;
+
     const s = location.state as any;
     const f = s?.from;
 
-    if (typeof f === "string") return f;
-    if (f?.pathname) return f.pathname as string;
+    const raw =
+      typeof f === "string" ? f :
+      f?.pathname ? String(f.pathname) :
+      fallback;
 
-    return ROUTES.DASHBOARD.OVERVIEW;
+    if (raw.startsWith("/auth")) return fallback;
+
+    return raw;
   }, [location.state]);
+
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -41,7 +48,7 @@ export function SignIn() {
     setSubmitting(true);
     try {
       await signIn({ email: cleanEmail, password: cleanPassword });
-      navigate(from, { replace: true });
+      navigate(safeFrom, { replace: true });
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "Login failed. Please try again.");
