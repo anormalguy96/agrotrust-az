@@ -47,7 +47,7 @@ function roleFromMetadata(u: User): UserRole {
 
 function minimalUserFromAuth(u: User): AuthUser {
   const email = String(u.email ?? "");
-  const role = roleFromMetadata(u); // ✅ use role from signUp metadata if present
+  const role = roleFromMetadata(u);
   return {
     id: u.id,
     email,
@@ -62,14 +62,14 @@ async function hydrateFromProfile(u: User): Promise<AuthUser> {
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("role, full_name, first_name, last_name, company_name, email")
-    // ✅ FIX: your profiles table is keyed by app_user_id
     .eq("app_user_id", u.id)
     .maybeSingle();
 
-  // If RLS blocks or profile missing, keep minimal (don’t break auth)
   if (error || !profile) return minimal;
 
-  const role = normalizeRole(profile.role ?? minimal.role);
+  const profileRoleRaw = String(profile.role ?? "").trim();
+  const role = profileRoleRaw ? normalizeRole(profileRoleRaw) : minimal.role;
+
   const name =
     String(profile.full_name ?? "").trim() ||
     `${String(profile.first_name ?? "").trim()} ${String(profile.last_name ?? "").trim()}`.trim() ||
@@ -95,22 +95,14 @@ export function AuthProvider({ children }: Props) {
       try {
         const { data, error } = await supabase.auth.getSession();
 
-        // ✅ Don’t nuke user if something transient happens
-        if (error) {
-          if (alive) setUser((prev) => prev ?? null);
-          return;
-        }
+        if (error) return;
 
         const u = data.session?.user;
 
         if (u && alive) {
-          // set minimal immediately, then hydrate
           setUser(minimalUserFromAuth(u));
           const full = await hydrateFromProfile(u);
           if (alive) setUser(full);
-        } else if (alive) {
-          // ✅ IMPORTANT: don't overwrite an already signed-in user
-          setUser((prev) => prev ?? null);
         }
       } finally {
         if (alive) setIsLoading(false);
@@ -123,15 +115,12 @@ export function AuthProvider({ children }: Props) {
       async (event: AuthChangeEvent, session: Session | null) => {
         if (!alive) return;
 
-        // Only clear user when truly signed out
         if (event === "SIGNED_OUT" || !session?.user) {
           setUser(null);
           return;
         }
 
         const u = session.user;
-
-        // Never wipe user during sign-in; set minimal, then hydrate
         setUser((prev) => prev ?? minimalUserFromAuth(u));
         const full = await hydrateFromProfile(u);
         if (alive) setUser(full);
@@ -159,7 +148,15 @@ export function AuthProvider({ children }: Props) {
 
     const minimal = minimalUserFromAuth(u);
     setUser(minimal);
-    return minimal;
+
+    // best-effort hydrate to correct role/name ASAP
+    try {
+      const full = await hydrateFromProfile(u);
+      setUser(full);
+      return full;
+    } catch {
+      return minimal;
+    }
   }, []);
 
   const signOut = useCallback(async () => {
