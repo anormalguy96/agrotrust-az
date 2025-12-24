@@ -8,4 +8,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("Missing Supabase env vars: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY");
 }
 
+console.log("VITE_SUPABASE_URL =", supabaseUrl);
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

@@ -40,13 +40,14 @@ function BuyerMarket() {
     });
   }, [lots, query]);
 
-  useEffect(() => {
-    let isMounted = true;
+useEffect(() => {
+  let alive = true;
 
-    async function load() {
-      setIsLoading(true);
-      setError(null);
+  (async () => {
+    setIsLoading(true);
+    setError(null);
 
+    try {
       const { data, error } = await supabase
         .from("lots")
         .select(
@@ -55,7 +56,7 @@ function BuyerMarket() {
         .eq("status", "published")
         .order("created_at", { ascending: false });
 
-      if (!isMounted) return;
+      if (!alive) return;
 
       if (error) {
         setError(error.message);
@@ -63,16 +64,19 @@ function BuyerMarket() {
       } else {
         setLots((data ?? []) as Lot[]);
       }
-
-      setIsLoading(false);
+    } catch (e) {
+      if (!alive) return;
+      setError(e instanceof Error ? e.message : String(e));
+      setLots([]);
+    } finally {
+      if (alive) setIsLoading(false);
     }
+  })();
 
-    load();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  return () => {
+    alive = false;
+  };
+}, []);
 
   return (
     <div className="container" style={{ padding: "24px 0" }}>
