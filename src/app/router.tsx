@@ -1,3 +1,5 @@
+// src/app/router.tsx (or wherever your router.tsx lives)
+
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ROUTES } from "@/app/config/routes";
 import { ProtectedRoute } from "@/app/guards/ProtectedRoute";
@@ -43,22 +45,41 @@ export const router = createBrowserRouter([
   {
     element: <MarketingLayout />,
     children: [
+      // Marketing
       { path: ROUTES.HOME, element: <Home /> },
       { path: ROUTES.HOW_IT_WORKS, element: <HowItWorks /> },
       { path: ROUTES.STANDARDS, element: <Standards /> },
       { path: ROUTES.FOR_FARMERS, element: <ForFarmers /> },
       { path: ROUTES.FOR_BUYERS, element: <ForBuyers /> },
       { path: ROUTES.CONTACT, element: <Contact /> },
-      { path: ROUTES.BUYERS.PASSPORT, element: <BuyerPassport /> },
-      { path: ROUTES.BUYERS.MARKET, element: <BuyerMarket /> },
-      { path: ROUTES.BUYERS.LOT_DETAILS, element: <BuyerLotDetails /> },
 
+      // Auth
       { path: ROUTES.AUTH.SIGN_IN, element: <SignIn /> },
       { path: ROUTES.AUTH.SIGN_UP, element: <SignUp /> },
       { path: ROUTES.AUTH.VERIFY_EMAIL, element: <VerifyEmail /> },
-
       { path: "/auth/callback", element: <AuthCallback /> },
-      { path: "/buyers/passport", element: <BuyerPassport /> },
+
+      // Buyers
+      // Keep passport public if QR scanning should work without login:
+      { path: ROUTES.BUYERS.PASSPORT, element: <BuyerPassport /> },
+
+      // Protect market + lot details (recommended):
+      {
+        path: ROUTES.BUYERS.MARKET,
+        element: (
+          <ProtectedRoute>
+            <BuyerMarket />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: ROUTES.BUYERS.LOT_DETAILS,
+        element: (
+          <ProtectedRoute>
+            <BuyerLotDetails />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 
@@ -83,10 +104,6 @@ export const router = createBrowserRouter([
       { path: ROUTES.DASHBOARD.SETTINGS, element: <Settings /> },
 
       { path: "/dashboard/escrow/init", element: <EscrowInit /> },
-      { path: "/buyers/market", element: <ProtectedRoute><BuyerMarket /></ProtectedRoute> },
-      { path: "/buyers/lots/:lotId", element: <ProtectedRoute><BuyerLotDetails /></ProtectedRoute> },
-
-
 
       {
         path: ROUTES.DASHBOARD.ADMIN_USERS,
@@ -108,8 +125,6 @@ export const router = createBrowserRouter([
   },
 
   { path: "/forbidden", element: <Forbidden /> },
-
   { path: "/dashboard/admin", element: <Navigate to={ROUTES.DASHBOARD.ADMIN_USERS} replace /> },
-
   { path: "*", element: <NotFound /> },
 ]);
