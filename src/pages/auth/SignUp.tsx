@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
 import { BRAND } from "@/app/config/constants";
@@ -16,7 +16,7 @@ function digitsOnly(v: string) {
 
 export function SignUp() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth(); // keep if you want, but we no longer auto-redirect on it
 
   const [role, setRole] = useState<UserRole>("cooperative");
   const [name, setName] = useState("");
@@ -30,12 +30,6 @@ export function SignUp() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
-
   const canSubmit = useMemo(() => {
     return (
       name.trim().length > 0 &&
@@ -45,9 +39,23 @@ export function SignUp() {
     );
   }, [name, email, password, busy]);
 
+  function postAuthRedirect(selectedRole: UserRole) {
+    if (selectedRole === "buyer") {
+      navigate(ROUTES.BUYERS.MARKET, { replace: true });
+      return;
+    }
+    navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
+  }
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    if (isAuthenticated) {
+      // If the user somehow opens /sign-up while already signed in, send them away.
+      postAuthRedirect(role);
+      return;
+    }
 
     const cleanedEmail = email.trim().toLowerCase();
     const cleanedName = name.trim();
@@ -63,6 +71,7 @@ export function SignUp() {
     const lastName = rest.join(" ") || firstName;
 
     setBusy(true);
+
     try {
       const { data, error: signErr } = await supabase.auth.signUp({
         email: cleanedEmail,
@@ -91,7 +100,7 @@ export function SignUp() {
           credentials: "same-origin",
           body: JSON.stringify({
             userId: appUserId,
-            role, // ✅ persist role into profiles too
+            role, // persist role into profiles too
             fullName: cleanedName,
             companyName: organisation.trim() || null,
             phoneCountryCallingCode: calling || null,
@@ -122,7 +131,7 @@ export function SignUp() {
       }
 
       // If confirmations are OFF -> session exists -> user is already signed in
-      navigate(ROUTES.DASHBOARD.OVERVIEW, { replace: true });
+      postAuthRedirect(role);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-up failed. Please try again.");
     } finally {
