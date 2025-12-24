@@ -58,28 +58,10 @@ export const router = createBrowserRouter([
       { path: ROUTES.AUTH.SIGN_UP, element: <SignUp /> },
       { path: ROUTES.AUTH.VERIFY_EMAIL, element: <VerifyEmail /> },
       { path: "/auth/callback", element: <AuthCallback /> },
-
-      // Buyers
-      // Keep passport public if QR scanning should work without login:
+      { path: ROUTES.BUYERS.MARKET, element: <BuyerMarket /> },
+      { path: ROUTES.BUYERS.LOT_DETAILS, element: <BuyerLotDetails /> },
       { path: ROUTES.BUYERS.PASSPORT, element: <BuyerPassport /> },
 
-      // Protect market + lot details (recommended):
-      {
-        path: ROUTES.BUYERS.MARKET,
-        element: (
-          <ProtectedRoute>
-            <BuyerMarket />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: ROUTES.BUYERS.LOT_DETAILS,
-        element: (
-          <ProtectedRoute>
-            <BuyerLotDetails />
-          </ProtectedRoute>
-        ),
-      },
     ],
   },
 
