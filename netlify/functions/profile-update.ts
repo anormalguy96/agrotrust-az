@@ -11,6 +11,12 @@ function digitsOnly(v: string) {
   return (v || "").replace(/[^\d]/g, "");
 }
 
+function normalizeSafeRole(input: unknown): "cooperative" | "buyer" {
+  const r = String(input ?? "").trim().toLowerCase();
+  if (r === "buyer") return "buyer";
+  return "cooperative";
+}
+
 export const handler: Handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
@@ -22,11 +28,15 @@ export const handler: Handler = async (event) => {
 
     const payload = JSON.parse(event.body) as {
       userId?: string;
+      role?: string | null;
+
       fullName?: string | null;
       companyName?: string | null;
+
       country?: string | null;
       countryIso2?: string | null;
       city?: string | null;
+
       phoneCountryCallingCode?: string | null;
       phoneNational?: string | null;
     };
@@ -44,20 +54,21 @@ export const handler: Handler = async (event) => {
 
     const row = {
       app_user_id: userId,
-    
+
+      role: payload.role ? normalizeSafeRole(payload.role) : null,
+
       full_name: payload.fullName ?? null,
       company_name: payload.companyName ?? null,
-    
+
       country: payload.country ?? null,
       country_iso2: iso2 || null,
       city: payload.city ?? null,
-    
+
       phone_country_calling_code: calling || null,
       phone_e164: computedE164 ?? null,
-    
+
       updated_at: new Date().toISOString(),
     };
-
 
     const { data, error } = await supabaseAdmin
       .from("profiles")

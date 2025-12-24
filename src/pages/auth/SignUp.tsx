@@ -8,7 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 type UserRole = "cooperative" | "buyer" | "admin";
 
-const MIN_PASSWORD_LEN = 8; // ✅ match Supabase (default is usually 8)
+const MIN_PASSWORD_LEN = 8;
 
 function digitsOnly(v: string) {
   return (v || "").replace(/[^\d]/g, "");
@@ -24,7 +24,6 @@ export function SignUp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // optional
   const [phoneCountry, setPhoneCountry] = useState("+994");
   const [phoneNumber, setPhoneNumber] = useState("");
 
@@ -50,7 +49,7 @@ export function SignUp() {
     e.preventDefault();
     setError(null);
 
-    const cleanedEmail = email.trim();
+    const cleanedEmail = email.trim().toLowerCase();
     const cleanedName = name.trim();
     const cleanedPassword = password.trim();
 
@@ -72,7 +71,7 @@ export function SignUp() {
           data: {
             first_name: firstName,
             last_name: lastName,
-            role,
+            role, // stored in auth user_metadata
           },
         },
       });
@@ -92,6 +91,7 @@ export function SignUp() {
           credentials: "same-origin",
           body: JSON.stringify({
             userId: appUserId,
+            role, // ✅ persist role into profiles too
             fullName: cleanedName,
             companyName: organisation.trim() || null,
             phoneCountryCallingCode: calling || null,
@@ -105,7 +105,7 @@ export function SignUp() {
         }
       }
 
-      // ✅ If email confirmation is required -> session is usually null
+      // If email confirmation is required -> session is usually null
       const needsEmailConfirmation = !data.session;
 
       if (needsEmailConfirmation) {
