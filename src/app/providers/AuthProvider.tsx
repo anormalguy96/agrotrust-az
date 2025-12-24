@@ -98,7 +98,7 @@ export function AuthProvider({ children }: Props) {
           const full = await hydrateFromProfile(u);
           if (alive) setUser(full);
         } else if (alive) {
-          setUser(null);
+          setUser((prev) => (prev ? prev : null));
         }
       } finally {
         if (alive) setIsLoading(false);
