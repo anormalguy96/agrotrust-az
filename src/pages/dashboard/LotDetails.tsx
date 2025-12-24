@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { PassportChemLabSection } from "@/features/passport/PassportChemLabSection"; 
-
 import { PassportQR } from "@/features/passport/components/PassportQR";
 import { env } from "@/app/config/env";
 import { ROUTES } from "@/app/config/routes";

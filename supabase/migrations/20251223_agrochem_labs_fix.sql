@@ -10,8 +10,7 @@ alter table public.passports enable row level security;
 
 -- 1) Ensure tables exist (idempotent)
 create table if not exists public.passport_agrochemicals (
-  id uuid 
-  primary key default gen_random_uuid(),
+  id uuid primary key default gen_random_uuid(),
   passport_id uuid not null references public.passports(id) on delete cascade,
   kind text not null check (kind in ('pesticide', 'fertilizer')),
   product_name text not null,

@@ -69,28 +69,48 @@ export function DashboardLayout() {
   );
 }
 
-
 function SidebarNav() {
-  const { user } = useAuth();
-
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `sidebar-link${isActive ? " active" : ""}`;
 
   return (
     <nav className="sidebar-nav">
-      {/* ...existing sections... */}
+      <div className="sidebar-section">
+        <div className="sidebar-section__title">Overview</div>
+        <NavLink to={ROUTES.DASHBOARD.OVERVIEW} className={linkClass} end>
+          Dashboard home
+        </NavLink>
+      </div>
 
-      {user?.role === "admin" && (
-        <div className="sidebar-section">
-          <div className="sidebar-section__title">Administration</div>
-          <NavLink to={ROUTES.DASHBOARD.ADMIN_USERS} className={linkClass}>
-            Users
-          </NavLink>
-          <NavLink to={ROUTES.DASHBOARD.ADMIN_ANALYTICS} className={linkClass}>
-            Analytics
-          </NavLink>
-        </div>
-      )}
+      <div className="sidebar-section">
+        <div className="sidebar-section__title">Traceability</div>
+        <NavLink to={ROUTES.DASHBOARD.LOTS} className={linkClass}>
+          Product lots
+        </NavLink>
+        <NavLink to={ROUTES.DASHBOARD.COOPERATIVES} className={linkClass}>
+          Cooperatives
+        </NavLink>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-section__title">Marketplace</div>
+        <NavLink to={ROUTES.DASHBOARD.BUYERS} className={linkClass}>
+          Buyers
+        </NavLink>
+        <NavLink to={ROUTES.DASHBOARD.RFQS} className={linkClass}>
+          RFQs
+        </NavLink>
+        <NavLink to={ROUTES.DASHBOARD.CONTRACTS} className={linkClass}>
+          Contracts
+        </NavLink>
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-section__title">Account</div>
+        <NavLink to={ROUTES.DASHBOARD.SETTINGS} className={linkClass}>
+          Settings
+        </NavLink>
+      </div>
     </nav>
   );
 }
