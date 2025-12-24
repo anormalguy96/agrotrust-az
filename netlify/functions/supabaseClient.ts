@@ -1,24 +1,34 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+let _client: SupabaseClient | null = null;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Missing Supabase env vars: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY");
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) {
+    console.error("Missing required env var at runtime:", {
+      name,
+      available: Object.keys(process.env).filter((k) => k.includes("SUPABASE")),
+    });
+    throw new Error(`Missing env var: ${name}`);
+  }
+  return v;
 }
 
-const storage = typeof window !== "undefined" ? window.localStorage : undefined;
+export function getSupabaseAdmin(): SupabaseClient {
+  if (_client) return _client;
 
-const g = globalThis as unknown as { __agrotrust_supabase__?: SupabaseClient };
+  const supabaseUrl = requireEnv("SUPABASE_URL");
+  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
-export const supabase =
-  g.__agrotrust_supabase__ ??
-  (g.__agrotrust_supabase__ = createClient(supabaseUrl, supabaseAnonKey, {
+  _client = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storage,
-      storageKey: "agrotrust-auth", // ✅ avoids fighting old sb-* keys
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
-  }));
+  });
+
+  return _client;
+}
+
+export const supabaseAdmin = getSupabaseAdmin();
