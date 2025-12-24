@@ -7,6 +7,8 @@ import { MarketingLayout } from "@/layouts/MarketingLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 
 import BuyerPassport from "@/pages/buyers/BuyerPassport";
+import BuyerMarket from "@/pages/buyers/BuyerMarket";
+import BuyerLotDetails from "@/pages/buyers/BuyerLotDetails";
 
 import { Home } from "@/pages/marketing/Home";
 import { HowItWorks } from "@/pages/marketing/HowItWorks";
@@ -47,6 +49,9 @@ export const router = createBrowserRouter([
       { path: ROUTES.FOR_FARMERS, element: <ForFarmers /> },
       { path: ROUTES.FOR_BUYERS, element: <ForBuyers /> },
       { path: ROUTES.CONTACT, element: <Contact /> },
+      { path: ROUTES.BUYERS.PASSPORT, element: <BuyerPassport /> },
+      { path: ROUTES.BUYERS.MARKET, element: <BuyerMarket /> },
+      { path: ROUTES.BUYERS.LOT_DETAILS, element: <BuyerLotDetails /> },
 
       { path: ROUTES.AUTH.SIGN_IN, element: <SignIn /> },
       { path: ROUTES.AUTH.SIGN_UP, element: <SignUp /> },
@@ -78,6 +83,10 @@ export const router = createBrowserRouter([
       { path: ROUTES.DASHBOARD.SETTINGS, element: <Settings /> },
 
       { path: "/dashboard/escrow/init", element: <EscrowInit /> },
+      { path: "/buyers/market", element: <ProtectedRoute><BuyerMarket /></ProtectedRoute> },
+      { path: "/buyers/lots/:lotId", element: <ProtectedRoute><BuyerLotDetails /></ProtectedRoute> },
+
+
 
       {
         path: ROUTES.DASHBOARD.ADMIN_USERS,

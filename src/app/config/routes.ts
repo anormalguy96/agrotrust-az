@@ -14,6 +14,13 @@ export const ROUTES = {
     VERIFY_EMAIL: "/auth/verify-email"
   },
 
+  // Buyers
+  BUYERS: {
+    PASSPORT: "/buyers/passport",
+    MARKET: "/buyers/market",
+    LOT_DETAILS: "/buyers/lots/:lotId"
+  },
+
   // Dashboard
   DASHBOARD: {
     ROOT: "/dashboard",
