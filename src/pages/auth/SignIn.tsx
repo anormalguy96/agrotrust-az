@@ -26,7 +26,7 @@ export function SignIn() {
       f?.pathname ? String(f.pathname) :
       fallback;
 
-    if (raw.startsWith("/auth")) return fallback;
+    if (raw.startsWith("/auth")) return ROUTES.DASHBOARD.OVERVIEW;
 
     return raw;
   }, [location.state]);
