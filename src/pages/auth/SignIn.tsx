@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { ROUTES } from "@/app/config/routes";
@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 export function SignIn() {
   const navigate = useNavigate();
   const location = useLocation();
-  const auth = useAuth();
+  const { signIn } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,10 +16,12 @@ export function SignIn() {
   const [error, setError] = useState<string | null>(null);
 
   const from = useMemo(() => {
-    const st: any = location.state;
-    const maybe = st?.from;
-    if (typeof maybe === "string") return maybe;
-    if (maybe?.pathname) return maybe.pathname;
+    const s = location.state as any;
+    const f = s?.from;
+
+    if (typeof f === "string") return f;
+    if (f?.pathname) return f.pathname as string;
+
     return ROUTES.DASHBOARD.OVERVIEW;
   }, [location.state]);
 
@@ -30,6 +32,7 @@ export function SignIn() {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password;
 
+    // ✅ Validate before setting submitting
     if (!cleanEmail || !cleanPassword) {
       setError("Email and password are required.");
       return;
@@ -37,8 +40,7 @@ export function SignIn() {
 
     setSubmitting(true);
     try {
-      await auth.signIn({ email: cleanEmail, password: cleanPassword });
-
+      await signIn({ email: cleanEmail, password: cleanPassword });
       navigate(from, { replace: true });
     } catch (err) {
       console.error(err);
@@ -68,6 +70,7 @@ export function SignIn() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
+                disabled={submitting}
               />
             </label>
 
@@ -81,6 +84,7 @@ export function SignIn() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                disabled={submitting}
               />
             </label>
 
@@ -90,7 +94,14 @@ export function SignIn() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginTop: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                alignItems: "center",
+                marginTop: "0.75rem",
+              }}
+            >
               <button type="submit" className="btn btn--primary" disabled={submitting}>
                 {submitting ? "Signing in…" : "Sign in"}
               </button>
