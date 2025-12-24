@@ -1,15 +1,17 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_APP_NAME?: string;
-  readonly VITE_API_BASE?: string;
-  readonly VITE_ENABLE_MOCKS?: string;
-
-  readonly VITE_AUTH_PROVIDER?: string;
-  readonly VITE_AUTH_DOMAIN?: string;
-  readonly VITE_AUTH_CLIENT_ID?: string;
+  readonly VITE_SUPABASE_URL: string;
+  readonly VITE_SUPABASE_ANON_KEY: string;
+  readonly VITE_DEBUG_SUPABASE?: string;
 }
 
 interface ImportMeta {
   readonly env: ImportMetaEnv;
+}
+
+declare global {
+  interface Window {
+    __agrotrust_supabase__?: SupabaseClient;
+  }
 }
