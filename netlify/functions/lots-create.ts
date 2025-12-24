@@ -55,7 +55,7 @@ export const handler: Handler = async (event) => {
       .single();
 
     if (profErr || !profile) return json(403, { error: "Profile not found" });
-    if (profile.role !== "coop") return json(403, { error: "Only cooperatives can create lots" });
+    if (profile.role == "coop") return json(403, { error: "Only cooperatives can create lots" });
 
     // 3) Validate body
     const body = JSON.parse(event.body || "{}") as Partial<Body>;
